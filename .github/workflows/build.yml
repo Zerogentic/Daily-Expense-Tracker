@@ -44,7 +44,7 @@ jobs:
         run: flutter build apk --release --build-number=${{ github.run_number }}
 
       - name: Name the APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk expense-tracker-${{ github.run_number }}.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk daily-expense-tracker-${{ github.run_number }}.apk
 
       - name: Publish as a test release
         uses: softprops/action-gh-release@v2
@@ -52,7 +52,7 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: Test build ${{ github.run_number }}
           prerelease: true
-          files: expense-tracker-${{ github.run_number }}.apk
+          files: daily-expense-tracker-${{ github.run_number }}.apk
           body: |
             Test build for your own Android phone (no SMS access, so Play Protect won't block it).
             Built from commit ${{ github.sha }}.

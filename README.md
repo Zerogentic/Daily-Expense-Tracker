@@ -1,4 +1,4 @@
-# Expense Tracker (Zero gentic), store edition
+# Daily Expense Tracker (Zero gentic)
 
 The version of the app for the Play Store and App Store. It has **no SMS access**: expenses and income are added by hand. The SMS auto-tracking version lives in a separate repository (`Zerogentic/expense-tracker`).
 
@@ -20,7 +20,7 @@ The version of the app for the Play Store and App Store. It has **no SMS access*
 
 Every push to `main` runs **Build** (Actions tab):
 
-- **Android test APK:** published on the **Releases** page as `expense-tracker-N.apk`. Install it on an Android phone directly; Play Protect doesn't block it because the app asks for no sensitive permissions.
+- **Android test APK:** published on the **Releases** page as `daily-expense-tracker-N.apk`. Install it on an Android phone directly; Play Protect doesn't block it because the app asks for no sensitive permissions.
 - **iOS build check:** compiles the app for iPhone without signing, to catch iOS-only problems early.
 
 ## Before the store release

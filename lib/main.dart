@@ -30,7 +30,7 @@ class MoneyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Expense Tracker',
+      title: 'Daily Expense Tracker',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(),
       home: const Shell(),

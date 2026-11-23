@@ -81,7 +81,7 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 28),
           const Center(
-            child: Text('Expense Tracker · version 1.0 · Zero gentic',
+            child: Text('Daily Expense Tracker · version 1.0 · Zero gentic',
                 style: TextStyle(color: AppColors.muted, fontSize: 12)),
           ),
         ],
