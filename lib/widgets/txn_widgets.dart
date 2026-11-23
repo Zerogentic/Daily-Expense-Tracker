@@ -247,11 +247,15 @@ class CategoryGrid extends StatelessWidget {
   }
 }
 
-/// Dialog for creating a category; returns the new key, or null if cancelled.
-Future<String?> createCategory(BuildContext context, {required bool income}) async {
-  final name = TextEditingController();
-  var iconIndex = 0;
-  var colorIndex = 0;
+/// Sheet for creating a category, or editing [existing]; returns its key, or null if cancelled.
+Future<String?> createCategory(BuildContext context, {required bool income, Category? existing}) async {
+  final name = TextEditingController(text: existing?.label ?? '');
+  var iconIndex = existing == null ? 0 : categoryIconChoices.indexOf(existing.icon);
+  var colorIndex = existing == null ? 0 : categoryColorChoices.indexOf(existing.color);
+  if (iconIndex < 0) iconIndex = 0;
+  if (colorIndex < 0) colorIndex = 0;
+  var reset = false;
+  final canReset = existing != null && !existing.custom && categoryOverrides.containsKey(existing.key);
   final state = AppScope.read(context);
 
   final created = await showModalBottomSheet<bool>(
@@ -269,7 +273,7 @@ Future<String?> createCategory(BuildContext context, {required bool income}) asy
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(income ? 'New income category' : 'New expense category',
+                Text(existing != null ? 'Edit category' : (income ? 'New income category' : 'New expense category'),
                     style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.text)),
                 const SizedBox(height: 16),
                 Row(
@@ -347,8 +351,18 @@ Future<String?> createCategory(BuildContext context, {required bool income}) asy
                     if (name.text.trim().isEmpty) return;
                     Navigator.pop(ctx, true);
                   },
-                  child: const Text('Create category'),
+                  child: Text(existing != null ? 'Save changes' : 'Create category'),
                 ),
+                if (canReset) ...[
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () {
+                      reset = true;
+                      Navigator.pop(ctx, false);
+                    },
+                    child: const Text('Reset to original name and icon'),
+                  ),
+                ],
               ],
             ),
           ),
@@ -356,7 +370,15 @@ Future<String?> createCategory(BuildContext context, {required bool income}) asy
       },
     ),
   );
+  if (reset && existing != null) {
+    await state.resetCategory(existing);
+    return existing.key;
+  }
   if (created != true) return null;
+  if (existing != null) {
+    await state.updateCategory(existing, label: name.text.trim(), iconIndex: iconIndex, colorIndex: colorIndex);
+    return existing.key;
+  }
   return state.addCategory(name.text.trim(), income: income, iconIndex: iconIndex, colorIndex: colorIndex);
 }
 

@@ -89,6 +89,15 @@ class AppDb {
   Future<void> addCategory(String key, String label, int iconIndex, int colorIndex, bool income) => _db.insert(
       'categories', {'key': key, 'label': label, 'icon': iconIndex, 'color': colorIndex, 'income': income ? 1 : 0});
 
+  /// Creates or replaces a category row. For a built-in key this stores the
+  /// user's name, icon and colour for it.
+  Future<void> saveCategory(String key, String label, int iconIndex, int colorIndex, bool income) => _db.insert(
+      'categories', {'key': key, 'label': label, 'icon': iconIndex, 'color': colorIndex, 'income': income ? 1 : 0},
+      conflictAlgorithm: ConflictAlgorithm.replace);
+
+  /// Drops the user's changes to a built-in category.
+  Future<void> resetCategory(String key) => _db.delete('categories', where: 'key = ?', whereArgs: [key]);
+
   /// Removes a category and moves its transactions and bills to [fallback].
   Future<void> deleteCategory(String key, String fallback) async {
     await _db.update('txns', {'category': fallback}, where: 'category = ?', whereArgs: [key]);

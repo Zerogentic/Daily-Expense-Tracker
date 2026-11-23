@@ -197,6 +197,24 @@ const List<IconData> categoryIconChoices = [
   Icons.celebration_rounded,
   Icons.park_rounded,
   Icons.wifi_rounded,
+  // Icons of the built-in categories, so they can be kept or swapped when editing.
+  Icons.restaurant_rounded,
+  Icons.shopping_basket_rounded,
+  Icons.directions_car_rounded,
+  Icons.local_gas_station_rounded,
+  Icons.shopping_bag_rounded,
+  Icons.receipt_long_rounded,
+  Icons.home_rounded,
+  Icons.movie_rounded,
+  Icons.favorite_rounded,
+  Icons.flight_rounded,
+  Icons.school_rounded,
+  Icons.account_balance_rounded,
+  Icons.payments_rounded,
+  Icons.swap_horiz_rounded,
+  Icons.credit_card_rounded,
+  Icons.work_rounded,
+  Icons.replay_rounded,
 ];
 
 const List<Color> categoryColorChoices = [
@@ -210,6 +228,19 @@ const List<Color> categoryColorChoices = [
   Color(0xFFF472B6),
   Color(0xFFC084FC),
   Color(0xFF94A3B8),
+  // Colours of the built-in categories.
+  Color(0xFFFF8A4C),
+  Color(0xFF4ADE80),
+  Color(0xFF60A5FA),
+  Color(0xFFF59E0B),
+  Color(0xFFE879F9),
+  Color(0xFF38BDF8),
+  Color(0xFFA78BFA),
+  Color(0xFF2DD4BF),
+  Color(0xFF86EFAC),
+  Color(0xFF7DD3FC),
+  Color(0xFF9CA3AF),
+  Color(0xFF818CF8),
 ];
 
 const List<Category> builtInCategories = [
@@ -238,6 +269,11 @@ const List<Category> builtInCategories = [
 /// Categories the user created; loaded from the database at startup.
 final List<Category> customCategories = [];
 
+/// Built-in categories the user renamed or restyled, by key.
+final Map<String, Category> categoryOverrides = {};
+
+bool isBuiltInCategory(String key) => builtInCategories.any((c) => c.key == key);
+
 Category customCategoryFromMap(Map<String, Object?> m) {
   final iconIndex = (m['icon'] as int).clamp(0, categoryIconChoices.length - 1);
   final colorIndex = (m['color'] as int).clamp(0, categoryColorChoices.length - 1);
@@ -247,11 +283,14 @@ Category customCategoryFromMap(Map<String, Object?> m) {
     categoryIconChoices[iconIndex],
     categoryColorChoices[colorIndex],
     income: (m['income'] as int) == 1,
-    custom: true,
+    custom: !isBuiltInCategory(m['key'] as String),
   );
 }
 
-List<Category> get categories => [...builtInCategories, ...customCategories];
+List<Category> get categories => [
+      for (final c in builtInCategories) categoryOverrides[c.key] ?? c,
+      ...customCategories,
+    ];
 List<Category> get expenseCategories => categories.where((c) => !c.income).toList();
 List<Category> get incomeCategories => categories.where((c) => c.income).toList();
 

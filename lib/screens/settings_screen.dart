@@ -21,42 +21,59 @@ class SettingsScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
         children: [
-          const SectionTitle('Your categories'),
-          Panel(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Column(
-              children: [
-                for (final c in customCategories)
-                  ListTile(
-                    leading: CategoryIcon(c, size: 36),
-                    title: Text(c.label),
-                    subtitle: Text(c.income ? 'Income' : 'Expense', style: const TextStyle(color: AppColors.muted)),
-                    trailing: IconButton(
-                      tooltip: 'Delete',
-                      icon: const Icon(Icons.delete_outline_rounded, color: AppColors.muted),
-                      onPressed: () async {
-                        final ok = await confirm(
-                          context,
-                          'Delete ${c.label}?',
-                          'Its transactions move to ${c.income ? 'Other income' : 'Other'}.',
-                        );
-                        if (ok) await state.deleteCategory(c);
-                      },
-                    ),
-                  ),
-                ListTile(
-                  leading: const Icon(Icons.add_circle_outline_rounded, color: AppColors.accent),
-                  title: const Text('New expense category'),
-                  onTap: () => createCategory(context, income: false),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.add_circle_outline_rounded, color: AppColors.good),
-                  title: const Text('New income category'),
-                  onTap: () => createCategory(context, income: true),
-                ),
-              ],
-            ),
+          const SectionTitle('Categories'),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(6, 0, 6, 10),
+            child: Text('Tap a category to rename it or change its icon and colour.',
+                style: TextStyle(color: AppColors.muted, fontSize: 12.5)),
           ),
+          for (final income in [false, true]) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(6, 6, 6, 8),
+              child: Text(income ? 'INCOME' : 'EXPENSES',
+                  style: const TextStyle(
+                      fontSize: 11.5, letterSpacing: 0.8, fontWeight: FontWeight.w700, color: AppColors.muted)),
+            ),
+            Panel(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Column(
+                children: [
+                  for (final c in income ? incomeCategories : expenseCategories)
+                    ListTile(
+                      leading: CategoryIcon(c, size: 36),
+                      title: Text(c.label),
+                      subtitle: c.custom
+                          ? const Text('Your category', style: TextStyle(color: AppColors.muted, fontSize: 12))
+                          : (categoryOverrides.containsKey(c.key)
+                              ? const Text('Edited', style: TextStyle(color: AppColors.muted, fontSize: 12))
+                              : null),
+                      onTap: () => createCategory(context, income: income, existing: c),
+                      trailing: c.custom
+                          ? IconButton(
+                              tooltip: 'Delete',
+                              icon: const Icon(Icons.delete_outline_rounded, color: AppColors.muted),
+                              onPressed: () async {
+                                final ok = await confirm(
+                                  context,
+                                  'Delete ${c.label}?',
+                                  'Its transactions move to ${c.income ? 'Other income' : 'Other'}.',
+                                );
+                                if (ok) await state.deleteCategory(c);
+                              },
+                            )
+                          : const Icon(Icons.edit_rounded, color: AppColors.muted, size: 20),
+                    ),
+                  ListTile(
+                    leading: Icon(Icons.add_circle_outline_rounded,
+                        color: income ? AppColors.receive : AppColors.accent),
+                    title: Text(income ? 'New income category' : 'New expense category'),
+                    onTap: () => createCategory(context, income: income),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+          ],
           const SectionTitle('Your data'),
           Panel(
             padding: const EdgeInsets.symmetric(vertical: 6),

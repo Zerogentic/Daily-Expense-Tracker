@@ -20,9 +20,7 @@ class AppState extends ChangeNotifier {
   static const totalBudgetKey = '_total';
 
   Future<void> load() async {
-    customCategories
-      ..clear()
-      ..addAll(await _db.customCategories());
+    await _loadCategories();
     txns = await _db.allTxns();
     budgets = await _db.budgets();
     bills = await _db.bills();
@@ -205,11 +203,34 @@ class AppState extends ChangeNotifier {
   Future<String> addCategory(String label, {required bool income, required int iconIndex, required int colorIndex}) async {
     final key = 'c_${DateTime.now().millisecondsSinceEpoch}';
     await _db.addCategory(key, label, iconIndex, colorIndex, income);
-    customCategories
-      ..clear()
-      ..addAll(await _db.customCategories());
+    await _loadCategories();
     notifyListeners();
     return key;
+  }
+
+  Future<void> _loadCategories() async {
+    final rows = await _db.customCategories();
+    customCategories
+      ..clear()
+      ..addAll(rows.where((c) => c.custom));
+    categoryOverrides
+      ..clear()
+      ..addEntries(rows.where((c) => !c.custom).map((c) => MapEntry(c.key, c)));
+  }
+
+  /// Renames or restyles any category, built-in or custom.
+  Future<void> updateCategory(Category c,
+      {required String label, required int iconIndex, required int colorIndex}) async {
+    await _db.saveCategory(c.key, label, iconIndex, colorIndex, c.income);
+    await _loadCategories();
+    notifyListeners();
+  }
+
+  /// Puts a built-in category back to its original name, icon and colour.
+  Future<void> resetCategory(Category c) async {
+    await _db.resetCategory(c.key);
+    await _loadCategories();
+    notifyListeners();
   }
 
   Future<void> deleteCategory(Category c) async {
@@ -277,6 +298,7 @@ class AppState extends ChangeNotifier {
     bills = [];
     rules = {};
     customCategories.clear();
+    categoryOverrides.clear();
     notifyListeners();
   }
 }
