@@ -1,0 +1,293 @@
+import 'package:flutter/foundation.dart' show ChangeNotifier;
+import 'package:flutter/widgets.dart';
+
+import 'models.dart';
+import 'services/db.dart';
+
+class AppState extends ChangeNotifier {
+  AppState(this._db);
+
+  final AppDb _db;
+
+  List<Txn> txns = [];
+  Map<String, double> budgets = {};
+  List<Bill> bills = [];
+
+  /// Categories the user picked per payee; used to suggest a category when adding.
+  Map<String, String> rules = {};
+  DateTime month = DateTime(DateTime.now().year, DateTime.now().month);
+
+  static const totalBudgetKey = '_total';
+
+  Future<void> load() async {
+    customCategories
+      ..clear()
+      ..addAll(await _db.customCategories());
+    txns = await _db.allTxns();
+    budgets = await _db.budgets();
+    bills = await _db.bills();
+    rules = await _db.rules();
+    notifyListeners();
+  }
+
+  /// Renames a payee on this transaction, or on every transaction with the same payee.
+  Future<void> renamePayee(Txn t, String name, {required bool all}) async {
+    final oldKey = t.merchant.toLowerCase().trim();
+    final newName = name.trim();
+    if (newName.isEmpty) return;
+    for (var i = 0; i < txns.length; i++) {
+      final x = txns[i];
+      final match = x.id == t.id || (all && oldKey.isNotEmpty && x.merchant.toLowerCase().trim() == oldKey);
+      if (!match || x.merchant == newName) continue;
+      final updated = x.copyWith(merchant: newName);
+      await _db.updateTxn(updated);
+      txns[i] = updated;
+    }
+    final rule = rules[oldKey];
+    if (all && rule != null) await rememberCategory(newName, rule);
+    notifyListeners();
+  }
+
+  // ---------- Month navigation ----------
+  bool get isCurrentMonth {
+    final now = DateTime.now();
+    return month.year == now.year && month.month == now.month;
+  }
+
+  void shiftMonth(int delta) {
+    final next = DateTime(month.year, month.month + delta);
+    final now = DateTime.now();
+    if (next.isAfter(DateTime(now.year, now.month))) return;
+    month = next;
+    notifyListeners();
+  }
+
+  // ---------- Queries ----------
+  List<Txn> txnsIn(DateTime m) =>
+      txns.where((t) => t.date.year == m.year && t.date.month == m.month).toList();
+
+  double spentIn(DateTime m) =>
+      txnsIn(m).where((t) => t.countsAsSpend).fold(0.0, (sum, t) => sum + t.amount);
+
+  double receivedIn(DateTime m) =>
+      txnsIn(m).where((t) => t.countsAsIncome).fold(0.0, (sum, t) => sum + t.amount);
+
+  double spentInCategory(DateTime m, String category) => txnsIn(m)
+      .where((t) => t.countsAsSpend && t.category == category)
+      .fold(0.0, (sum, t) => sum + t.amount);
+
+  /// Expense categories for the month, largest first.
+  List<MapEntry<String, double>> spendByCategory(DateTime m) {
+    final totals = <String, double>{};
+    for (final t in txnsIn(m)) {
+      if (!t.countsAsSpend) continue;
+      totals[t.category] = (totals[t.category] ?? 0) + t.amount;
+    }
+    final list = totals.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    return list;
+  }
+
+  /// Spending for the [count] months ending at the selected month.
+  List<MapEntry<DateTime, double>> spendTrend(int count) {
+    return [
+      for (var i = count - 1; i >= 0; i--)
+        MapEntry(DateTime(month.year, month.month - i), spentIn(DateTime(month.year, month.month - i))),
+    ];
+  }
+
+  /// Money received for the [count] months ending at the selected month.
+  List<double> receivedTrend(int count) => [
+        for (var i = count - 1; i >= 0; i--) receivedIn(DateTime(month.year, month.month - i)),
+      ];
+
+  /// Largest single expense in the month, if any.
+  Txn? biggestExpense(DateTime m) {
+    Txn? best;
+    for (final t in txnsIn(m)) {
+      if (t.countsAsSpend && (best == null || t.amount > best.amount)) best = t;
+    }
+    return best;
+  }
+
+  /// Spending divided by days so far (current month) or days in the month.
+  double dailyAverage(DateTime m) {
+    final now = DateTime.now();
+    final days = (m.year == now.year && m.month == now.month) ? now.day : DateTime(m.year, m.month + 1, 0).day;
+    return spentIn(m) / days;
+  }
+
+  List<MapEntry<String, double>> topMerchants(DateTime m, {int limit = 5}) {
+    final totals = <String, double>{};
+    for (final t in txnsIn(m)) {
+      if (!t.countsAsSpend || t.merchant.isEmpty) continue;
+      totals[t.merchant] = (totals[t.merchant] ?? 0) + t.amount;
+    }
+    final list = totals.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    return list.take(limit).toList();
+  }
+
+  double? get totalBudget => budgets[totalBudgetKey];
+
+  /// Bills not yet paid this calendar month, soonest first.
+  List<Bill> get unpaidBillsThisMonth {
+    final now = DateTime.now();
+    final thisMonth = DateTime(now.year, now.month);
+    final list = bills.where((b) => !b.isPaidFor(thisMonth)).toList()
+      ..sort((a, b) => a.dueDateIn(thisMonth).compareTo(b.dueDateIn(thisMonth)));
+    return list;
+  }
+
+  // ---------- Transactions ----------
+  Future<void> addTxn(Txn t) async {
+    final id = await _db.insertTxn(t);
+    txns.insert(0, t.copyWith(id: id));
+    txns.sort((a, b) => b.date.compareTo(a.date));
+    notifyListeners();
+  }
+
+  Future<void> updateTxn(Txn t) async {
+    await _db.updateTxn(t);
+    final i = txns.indexWhere((x) => x.id == t.id);
+    if (i >= 0) txns[i] = t;
+    txns.sort((a, b) => b.date.compareTo(a.date));
+    notifyListeners();
+  }
+
+  /// Changes the category of one transaction only.
+  Future<void> setCategory(Txn t, String category) async {
+    final i = txns.indexWhere((x) => x.id == t.id);
+    final current = i >= 0 ? txns[i] : t;
+    await updateTxn(current.copyWith(category: category));
+  }
+
+  /// Other transactions from the same merchant and in the same direction.
+  List<Txn> similarTxns(Txn t) {
+    final key = t.merchant.toLowerCase().trim();
+    if (key.isEmpty) return const [];
+    return txns
+        .where((o) => o.id != t.id && o.type == t.type && o.merchant.toLowerCase().trim() == key)
+        .toList();
+  }
+
+  /// Other transactions with the same payee name, money in or out.
+  List<Txn> similarTxnsAnyDirection(Txn t) {
+    final key = t.merchant.toLowerCase().trim();
+    if (key.isEmpty) return const [];
+    return txns.where((o) => o.id != t.id && o.merchant.toLowerCase().trim() == key).toList();
+  }
+
+  /// Moves several transactions to [category] in one go.
+  Future<void> applyCategory(List<Txn> list, String category) async {
+    final ids = {for (final t in list) t.id};
+    for (var i = 0; i < txns.length; i++) {
+      final t = txns[i];
+      if (!ids.contains(t.id) || t.category == category) continue;
+      final updated = t.copyWith(category: category);
+      await _db.updateTxn(updated);
+      txns[i] = updated;
+    }
+    notifyListeners();
+  }
+
+  /// New transactions for [merchant] will be suggested [category].
+  Future<void> rememberCategory(String merchant, String category) async {
+    final key = merchant.toLowerCase().trim();
+    if (key.isEmpty) return;
+    rules[key] = category;
+    await _db.setRule(key, category);
+  }
+
+  /// Marks a transaction as "not an expense" (or not income) so totals skip it.
+  Future<void> setExcluded(Txn t, bool excluded) => updateTxn(t.copyWith(excluded: excluded));
+
+  // ---------- Categories ----------
+  /// Creates a category and returns its key.
+  Future<String> addCategory(String label, {required bool income, required int iconIndex, required int colorIndex}) async {
+    final key = 'c_${DateTime.now().millisecondsSinceEpoch}';
+    await _db.addCategory(key, label, iconIndex, colorIndex, income);
+    customCategories
+      ..clear()
+      ..addAll(await _db.customCategories());
+    notifyListeners();
+    return key;
+  }
+
+  Future<void> deleteCategory(Category c) async {
+    final fallback = c.income ? 'income' : 'other';
+    await _db.deleteCategory(c.key, fallback);
+    customCategories.removeWhere((x) => x.key == c.key);
+    rules.removeWhere((_, v) => v == c.key);
+    budgets.remove(c.key);
+    txns = await _db.allTxns();
+    bills = await _db.bills();
+    notifyListeners();
+  }
+
+  Future<void> deleteTxn(Txn t) async {
+    if (t.id == null) return;
+    await _db.deleteTxn(t.id!);
+    txns.removeWhere((x) => x.id == t.id);
+    notifyListeners();
+  }
+
+  // ---------- Budgets ----------
+  Future<void> setBudget(String category, double amount) async {
+    await _db.setBudget(category, amount);
+    if (amount <= 0) {
+      budgets.remove(category);
+    } else {
+      budgets[category] = amount;
+    }
+    notifyListeners();
+  }
+
+  // ---------- Bills ----------
+  Future<void> saveBill(Bill b) async {
+    await _db.saveBill(b);
+    bills = await _db.bills();
+    notifyListeners();
+  }
+
+  Future<void> deleteBill(Bill b) async {
+    if (b.id == null) return;
+    await _db.deleteBill(b.id!);
+    bills.removeWhere((x) => x.id == b.id);
+    notifyListeners();
+  }
+
+  Future<void> markBillPaid(Bill b, {bool addExpense = true}) async {
+    final now = DateTime.now();
+    await saveBill(b.copyWith(lastPaid: now));
+    if (addExpense) {
+      await addTxn(Txn(
+        amount: b.amount,
+        type: TxnType.debit,
+        category: b.category,
+        merchant: b.name,
+        note: 'Bill payment',
+        date: now,
+      ));
+    }
+  }
+
+  Future<void> clearAll() async {
+    await _db.clearAll();
+    txns = [];
+    budgets = {};
+    bills = [];
+    rules = {};
+    customCategories.clear();
+    notifyListeners();
+  }
+}
+
+/// Makes [AppState] available to every screen.
+class AppScope extends InheritedNotifier<AppState> {
+  const AppScope({super.key, required AppState state, required super.child}) : super(notifier: state);
+
+  static AppState of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<AppScope>()!.notifier!;
+
+  static AppState read(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<AppScope>()!.notifier!;
+}
