@@ -97,6 +97,13 @@ class AppState extends ChangeNotifier {
     return v < 0.005 ? 0 : v;
   }
 
+  /// The amount after refunds: what was really spent, or what still counts as income.
+  /// Unlike [counted], it ignores the "Count as an expense" switch.
+  double netAmount(Txn t) {
+    final v = t.isExpense ? t.amount - refundedFor(t) : t.amount - usedAsRefund(t);
+    return v < 0.005 ? 0 : v;
+  }
+
   double remainingToRefund(Txn expense) {
     final v = expense.amount - refundedFor(expense);
     return v < 0.005 ? 0 : v;

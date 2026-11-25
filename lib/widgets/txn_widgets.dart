@@ -100,15 +100,33 @@ class TxnTile extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            Text(
-              '${txn.isExpense ? '−' : '+'}${money(txn.amount)}',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: txn.excluded ? AppColors.muted : (txn.isExpense ? AppColors.spend : AppColors.receive),
-                decoration: txn.excluded ? TextDecoration.lineThrough : null,
-              ),
-            ),
+            Builder(builder: (context) {
+              final net = state.netAmount(txn);
+              final reduced = net < txn.amount - 0.005;
+              final gone = txn.excluded || net <= 0;
+              final sign = txn.isExpense ? '−' : '+';
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '$sign${money(gone ? txn.amount : net)}',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: gone ? AppColors.muted : (txn.isExpense ? AppColors.spend : AppColors.receive),
+                      decoration: gone ? TextDecoration.lineThrough : null,
+                    ),
+                  ),
+                  if (reduced && !gone)
+                    Text(
+                      money(txn.amount),
+                      style: const TextStyle(
+                          fontSize: 11.5, color: AppColors.muted, decoration: TextDecoration.lineThrough),
+                    ),
+                ],
+              );
+            }),
           ],
         ),
       ),
@@ -437,7 +455,7 @@ class _TxnDetails extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             Text(
-              '${txn.isExpense ? '−' : '+'}${money(txn.amount)}',
+              '${txn.isExpense ? '−' : '+'}${money(state.netAmount(txn))}',
               style: TextStyle(
                 fontSize: 34,
                 fontWeight: FontWeight.w800,
@@ -445,6 +463,16 @@ class _TxnDetails extends StatelessWidget {
                 color: txn.isExpense ? AppColors.spend : AppColors.receive,
               ),
             ),
+            if (state.netAmount(txn) < txn.amount - 0.005)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  txn.isExpense
+                      ? 'Paid ${money(txn.amount)} · ${money(state.refundedFor(txn))} refunded'
+                      : 'Received ${money(txn.amount)} · ${money(state.usedAsRefund(txn))} counted as refund',
+                  style: const TextStyle(color: AppColors.muted, fontSize: 13),
+                ),
+              ),
             const SizedBox(height: 16),
             _row(txn.isExpense ? 'Paid to' : 'From', txn.merchant.isEmpty ? 'Not added' : txn.merchant,
                 action: txn.merchant.isEmpty ? 'Add name' : 'Rename',
