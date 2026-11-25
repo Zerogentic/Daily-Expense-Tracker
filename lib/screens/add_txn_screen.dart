@@ -209,8 +209,10 @@ class _AddTxnScreenState extends State<AddTxnScreen> {
               },
             ),
             const SizedBox(height: 20),
-            Container(
-              decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(14)),
+            Material(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(14),
+              clipBehavior: Clip.antiAlias,
               child: SwitchListTile(
                 value: !_excluded,
                 activeThumbColor: AppColors.accent,

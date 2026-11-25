@@ -44,13 +44,17 @@ jobs:
         continue-on-error: true
         run: flutter test test_screens --update-goldens
 
-      - name: Upload screenshots
+      # Kept on a separate 'screenshots' branch so they can be viewed on GitHub.
+      - name: Save screenshots to the screenshots branch
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: screenshots
-          path: test_screens/goldens/
-          if-no-files-found: ignore
+        continue-on-error: true
+        run: |
+          [ -d test_screens/goldens ] || exit 0
+          cd test_screens/goldens
+          git init -q -b screenshots
+          git add -A
+          git -c user.name=build -c user.email=build@users.noreply.github.com commit -qm "Screenshots for ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" screenshots
 
       - name: Build APK
         run: flutter build apk --release --build-number=${{ github.run_number }}

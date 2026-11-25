@@ -372,8 +372,10 @@ Future<String?> createCategory(BuildContext context, {required bool income, Cate
                   ],
                 ),
                 const SizedBox(height: 14),
-                Container(
-                  decoration: BoxDecoration(color: AppColors.surface2, borderRadius: BorderRadius.circular(14)),
+                Material(
+                  color: AppColors.surface2,
+                  borderRadius: BorderRadius.circular(14),
+                  clipBehavior: Clip.antiAlias,
                   child: SwitchListTile(
                     value: saving,
                     activeThumbColor: AppColors.accent,
