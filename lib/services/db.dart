@@ -13,11 +13,12 @@ class AppDb {
     final dir = await getDatabasesPath();
     final db = await openDatabase(
       p.join(dir, 'money.db'),
-      version: 4,
+      version: 5,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) await _upgradeToV2(db);
         if (oldVersion < 3) await _upgradeToV3(db);
         if (oldVersion < 4) await _upgradeToV4(db);
+        if (oldVersion < 5) await _upgradeToV5(db);
       },
       onCreate: (db, version) async {
         await db.execute('''
@@ -51,6 +52,7 @@ class AppDb {
         await _upgradeToV2(db);
         await _upgradeToV3(db);
         await _upgradeToV4(db);
+        await _upgradeToV5(db);
       },
     );
     return AppDb._(db);
@@ -70,6 +72,11 @@ class AppDb {
   }
 
   /// v3: names the user gave to payees ("raju.k" -> "Raju (plumber)").
+  /// v5: categories can count as savings.
+  static Future<void> _upgradeToV5(Database db) async {
+    await db.execute('ALTER TABLE categories ADD COLUMN saving INTEGER NOT NULL DEFAULT 0');
+  }
+
   /// v4: refunds linked to expenses.
   static Future<void> _upgradeToV4(Database db) async {
     await db.execute('''
@@ -108,13 +115,29 @@ class AppDb {
     return rows.map(customCategoryFromMap).toList();
   }
 
-  Future<void> addCategory(String key, String label, int iconIndex, int colorIndex, bool income) => _db.insert(
-      'categories', {'key': key, 'label': label, 'icon': iconIndex, 'color': colorIndex, 'income': income ? 1 : 0});
+  Future<void> addCategory(String key, String label, int iconIndex, int colorIndex, bool income, {bool saving = false}) =>
+      _db.insert('categories', {
+        'key': key,
+        'label': label,
+        'icon': iconIndex,
+        'color': colorIndex,
+        'income': income ? 1 : 0,
+        'saving': saving ? 1 : 0,
+      });
 
   /// Creates or replaces a category row. For a built-in key this stores the
   /// user's name, icon and colour for it.
-  Future<void> saveCategory(String key, String label, int iconIndex, int colorIndex, bool income) => _db.insert(
-      'categories', {'key': key, 'label': label, 'icon': iconIndex, 'color': colorIndex, 'income': income ? 1 : 0},
+  Future<void> saveCategory(String key, String label, int iconIndex, int colorIndex, bool income, {bool saving = false}) =>
+      _db.insert(
+      'categories',
+      {
+        'key': key,
+        'label': label,
+        'icon': iconIndex,
+        'color': colorIndex,
+        'income': income ? 1 : 0,
+        'saving': saving ? 1 : 0,
+      },
       conflictAlgorithm: ConflictAlgorithm.replace);
 
   /// Drops the user's changes to a built-in category.

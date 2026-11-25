@@ -36,8 +36,18 @@ class Txn {
   final bool excluded;
 
   bool get isExpense => type == TxnType.debit;
-  bool get countsAsSpend => isExpense && !excluded;
-  bool get countsAsIncome => !isExpense && !excluded;
+  /// In a savings category (investments, deposits, or money back from them).
+  bool get isSaving => categoryFor(category).saving;
+
+  /// Spending: money out that isn't savings.
+  bool get countsAsSpend => isExpense && !excluded && !isSaving;
+
+  /// Money put into savings and investments.
+  bool get countsAsSaving => isExpense && !excluded && isSaving;
+
+  /// Money taken back out of savings (redemptions, matured deposits); not income.
+  bool get countsAsWithdrawal => !isExpense && !excluded && isSaving;
+  bool get countsAsIncome => !isExpense && !excluded && !isSaving;
   bool get fromSms => source == 'sms';
 
   String get title {
@@ -184,7 +194,8 @@ class Bill {
 }
 
 class Category {
-  const Category(this.key, this.label, this.icon, this.color, {this.income = false, this.custom = false});
+  const Category(this.key, this.label, this.icon, this.color,
+      {this.income = false, this.custom = false, this.saving = false});
 
   final String key;
   final String label;
@@ -192,6 +203,9 @@ class Category {
   final Color color;
   final bool income;
   final bool custom;
+
+  /// Savings, not spending or income: investments, deposits, and money back from them.
+  final bool saving;
 }
 
 /// Icons offered for new categories. Stored by index so release builds can
@@ -240,6 +254,9 @@ const List<IconData> categoryIconChoices = [
   Icons.work_rounded,
   Icons.replay_rounded,
   Icons.help_outline_rounded,
+  Icons.trending_up_rounded,
+  Icons.account_balance_wallet_rounded,
+  Icons.lock_clock_rounded,
 ];
 
 const List<Color> categoryColorChoices = [
@@ -287,10 +304,14 @@ const List<Category> builtInCategories = [
   Category('card_payment', 'Card bill payment', Icons.credit_card_rounded, Color(0xFF818CF8)),
   Category('misc', 'Other', Icons.category_rounded, Color(0xFFA8A29E)),
   // Not categorised yet: the app couldn't tell and the user hasn't picked one.
+  Category('investments', 'Investments', Icons.trending_up_rounded, Color(0xFF2F7BFF), saving: true),
+  Category('deposits', 'FD, RD & PPF', Icons.lock_clock_rounded, Color(0xFF22D3EE), saving: true),
   Category('other', 'Unknown', Icons.help_outline_rounded, Color(0xFF9CA3AF)),
   Category('salary', 'Salary', Icons.work_rounded, Color(0xFF34D399), income: true),
   Category('refund', 'Refunds & cashback', Icons.replay_rounded, Color(0xFF22D3EE), income: true),
   Category('misc_income', 'Other income', Icons.savings_rounded, Color(0xFF4ADE80), income: true),
+  Category('redemption', 'Investment withdrawals', Icons.account_balance_wallet_rounded, Color(0xFF22D3EE),
+      income: true, saving: true),
   // Money in that isn't categorised yet.
   Category('income', 'Unknown', Icons.help_outline_rounded, Color(0xFF9CA3AF), income: true),
   Category('transfers_in', 'Transfers in', Icons.swap_horiz_rounded, Color(0xFF7DD3FC), income: true),
@@ -314,6 +335,7 @@ Category customCategoryFromMap(Map<String, Object?> m) {
     categoryColorChoices[colorIndex],
     income: (m['income'] as int) == 1,
     custom: !isBuiltInCategory(m['key'] as String),
+    saving: ((m['saving'] as int?) ?? 0) == 1,
   );
 }
 

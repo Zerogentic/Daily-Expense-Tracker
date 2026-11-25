@@ -114,7 +114,9 @@ class TxnTile extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
-                      color: gone ? AppColors.muted : (txn.isExpense ? AppColors.spend : AppColors.receive),
+                      color: gone
+                          ? AppColors.muted
+                          : (txn.isSaving ? AppColors.accent : (txn.isExpense ? AppColors.spend : AppColors.receive)),
                       decoration: gone ? TextDecoration.lineThrough : null,
                     ),
                   ),
@@ -279,6 +281,7 @@ Future<String?> createCategory(BuildContext context, {required bool income, Cate
   if (iconIndex < 0) iconIndex = 0;
   if (colorIndex < 0) colorIndex = 0;
   var reset = false;
+  var saving = existing?.saving ?? false;
   final canReset = existing != null && !existing.custom && categoryOverrides.containsKey(existing.key);
   final state = AppScope.read(context);
 
@@ -368,6 +371,22 @@ Future<String?> createCategory(BuildContext context, {required bool income, Cate
                       ),
                   ],
                 ),
+                const SizedBox(height: 14),
+                Container(
+                  decoration: BoxDecoration(color: AppColors.surface2, borderRadius: BorderRadius.circular(14)),
+                  child: SwitchListTile(
+                    value: saving,
+                    activeThumbColor: AppColors.accent,
+                    title: Text(income ? 'Money back from savings' : 'Counts as savings'),
+                    subtitle: Text(
+                      income
+                          ? 'Redemptions, matured deposits. Not counted as income.'
+                          : 'Investments, deposits. Not counted as spending or in budgets.',
+                      style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
+                    ),
+                    onChanged: (v) => setSheet(() => saving = v),
+                  ),
+                ),
                 const SizedBox(height: 22),
                 FilledButton(
                   style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
@@ -400,10 +419,12 @@ Future<String?> createCategory(BuildContext context, {required bool income, Cate
   }
   if (created != true) return null;
   if (existing != null) {
-    await state.updateCategory(existing, label: name.text.trim(), iconIndex: iconIndex, colorIndex: colorIndex);
+    await state.updateCategory(existing,
+        label: name.text.trim(), iconIndex: iconIndex, colorIndex: colorIndex, saving: saving);
     return existing.key;
   }
-  return state.addCategory(name.text.trim(), income: income, iconIndex: iconIndex, colorIndex: colorIndex);
+  return state.addCategory(name.text.trim(),
+      income: income, iconIndex: iconIndex, colorIndex: colorIndex, saving: saving);
 }
 
 Future<void> showTxnDetails(BuildContext context, Txn txn) {

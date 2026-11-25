@@ -251,6 +251,28 @@ class AppState extends ChangeNotifier {
     return best;
   }
 
+  /// Money put into savings and investments in the month.
+  double savedIn(DateTime m) => txnsIn(m).where((t) => t.countsAsSaving).fold(0.0, (sum, t) => sum + counted(t));
+
+  /// Money taken back out of savings in the month (redemptions, matured deposits).
+  double withdrawnIn(DateTime m) =>
+      txnsIn(m).where((t) => t.countsAsWithdrawal).fold(0.0, (sum, t) => sum + counted(t));
+
+  /// Saved minus withdrawn.
+  double netSavedIn(DateTime m) => savedIn(m) - withdrawnIn(m);
+
+  /// Share of the month's income that went into savings, or null with no income.
+  double? savingsRate(DateTime m) {
+    final income = receivedIn(m);
+    if (income <= 0) return null;
+    return netSavedIn(m) / income;
+  }
+
+  /// Money saved for the [count] months ending at the selected month.
+  List<double> savedTrend(int count) => [
+        for (var i = count - 1; i >= 0; i--) savedIn(DateTime(month.year, month.month - i)),
+      ];
+
   /// Spending divided by days so far (current month) or days in the month.
   double dailyAverage(DateTime m) {
     final now = DateTime.now();
@@ -386,9 +408,10 @@ class AppState extends ChangeNotifier {
 
   // ---------- Categories ----------
   /// Creates a category and returns its key.
-  Future<String> addCategory(String label, {required bool income, required int iconIndex, required int colorIndex}) async {
+  Future<String> addCategory(String label,
+      {required bool income, required int iconIndex, required int colorIndex, bool saving = false}) async {
     final key = 'c_${DateTime.now().millisecondsSinceEpoch}';
-    await _db.addCategory(key, label, iconIndex, colorIndex, income);
+    await _db.addCategory(key, label, iconIndex, colorIndex, income, saving: saving);
     await _loadCategories();
     notifyListeners();
     return key;
@@ -406,8 +429,8 @@ class AppState extends ChangeNotifier {
 
   /// Renames or restyles any category, built-in or custom.
   Future<void> updateCategory(Category c,
-      {required String label, required int iconIndex, required int colorIndex}) async {
-    await _db.saveCategory(c.key, label, iconIndex, colorIndex, c.income);
+      {required String label, required int iconIndex, required int colorIndex, bool? saving}) async {
+    await _db.saveCategory(c.key, label, iconIndex, colorIndex, c.income, saving: saving ?? c.saving);
     await _loadCategories();
     notifyListeners();
   }

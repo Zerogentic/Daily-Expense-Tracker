@@ -6,6 +6,17 @@ import '../models.dart';
 /// 3. keywords in the payee name and message text.
 class Categorizer {
   static const Map<String, List<String>> _keywords = {
+    // Checked first: SIP auto-debits mention the clearing house or fund platform.
+    'investments': [
+      'mutual fund', 'sip', 'iccl', 'indian clearing', 'bse limited', 'bse star', 'bsestarmf', 'nse clearing',
+      'nsccl', 'nse mf', 'cams', 'camsonline', 'kfintech', 'kfin', 'karvy', 'zerodha', 'groww', 'upstox',
+      'angel one', 'angel broking', 'kuvera', 'paytm money', 'smallcase', 'et money', 'etmoney', 'indmoney',
+      'coin by zerodha', 'digital gold', 'safegold', 'augmont', 'sgb', 'sovereign gold', 'stocks', 'demat'
+    ],
+    'deposits': [
+      'fixed deposit', 'recurring deposit', 'term deposit', 'fd booking', 'fd opening', 'rd instalment',
+      'rd installment', 'ppf', 'public provident', 'nps', 'national pension', 'sukanya', 'ssy'
+    ],
     'food': [
       'swiggy', 'zomato', 'restaurant', 'cafe', 'coffee', 'bakery', 'hotel', 'dominos', 'domino',
       'mcdonald', 'kfc', 'pizza', 'burger', 'starbucks', 'chai', 'biryani', 'eatsure', 'food'
@@ -60,6 +71,13 @@ class Categorizer {
       if (hay.contains('refund') || hay.contains('cashback') || hay.contains('reversed') || hay.contains('reversal')) {
         return 'refund';
       }
+      // Money back from investments or deposits is your own savings returning, not income.
+      const withdrawals = [
+        'redemption', 'redeemed', 'redeem', 'maturity', 'matured', 'premature closure', 'fd closure', 'fd closed',
+        'mutual fund', 'iccl', 'indian clearing', 'nse clearing', 'nsccl', 'bse limited', 'zerodha', 'groww',
+        'upstox', 'kfintech', 'cams',
+      ];
+      if (withdrawals.any((w) => RegExp('(?<![a-z])${RegExp.escape(w)}(?![a-z])').hasMatch(hay))) return 'redemption';
       return 'income';
     }
 

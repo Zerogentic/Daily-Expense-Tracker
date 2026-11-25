@@ -158,6 +158,7 @@ class _DayTotal extends StatelessWidget {
     final state = AppScope.of(context);
     final out = txns.where((t) => t.countsAsSpend).fold<double>(0, (s, t) => s + state.counted(t));
     final inn = txns.where((t) => t.countsAsIncome).fold<double>(0, (s, t) => s + state.counted(t));
+    final saved = txns.where((t) => t.countsAsSaving).fold<double>(0, (s, t) => s + state.counted(t));
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -168,6 +169,10 @@ class _DayTotal extends StatelessWidget {
         if (inn > 0)
           Text('+${money(inn)}',
               style: const TextStyle(fontSize: 12.5, color: AppColors.receive, fontWeight: FontWeight.w600)),
+        if (saved > 0 && (out > 0 || inn > 0)) const SizedBox(width: 10),
+        if (saved > 0)
+          Text('${money(saved)} saved',
+              style: const TextStyle(fontSize: 12.5, color: AppColors.accent, fontWeight: FontWeight.w600)),
       ],
     );
   }

@@ -84,12 +84,15 @@ class HomeScreen extends StatelessWidget {
                     LegendDot(color: AppColors.spend, label: 'Spent'),
                     SizedBox(width: 16),
                     LegendDot(color: AppColors.receive, label: 'Received'),
+                    SizedBox(width: 16),
+                    LegendDot(color: AppColors.accent, label: 'Invested'),
                   ],
                 ),
                 const SizedBox(height: 16),
                 FlowBars(
                   spent: trend.map((e) => e.value).toList(),
                   received: inTrend,
+                  saved: state.savedTrend(6),
                   labels: trend.map((e) => monthShort(e.key)).toList(),
                 ),
               ],
@@ -206,7 +209,10 @@ class _HeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final b = state.totalBudget;
     final fraction = (b == null || b <= 0) ? 0.0 : spent / b;
-    final net = received - spent;
+    final m = state.month;
+    final invested = state.netSavedIn(m);
+    final rate = state.savingsRate(m);
+    final net = received - spent - invested;
 
     return Container(
       decoration: BoxDecoration(
@@ -317,11 +323,20 @@ class _HeroCard extends StatelessWidget {
                         color: AppColors.receive,
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _FlowPill(
+                        icon: Icons.savings_rounded,
+                        label: rate == null || rate <= 0 ? 'Invested' : 'Invested · ${(rate * 100).round()}%',
+                        value: '${invested < 0 ? '−' : ''}${money(invested.abs())}',
+                        color: AppColors.accent2,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: _FlowPill(
                         icon: net < 0 ? Icons.trending_down_rounded : Icons.trending_up_rounded,
-                        label: 'Net',
+                        label: 'Left over',
                         value: '${net < 0 ? '−' : '+'}${money(net.abs())}',
                         color: net < 0 ? AppColors.spend : AppColors.receive,
                       ),

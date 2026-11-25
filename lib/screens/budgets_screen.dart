@@ -18,7 +18,7 @@ class BudgetsScreen extends StatelessWidget {
     final spent = state.spentIn(m);
     final total = state.totalBudget;
 
-    final cats = expenseCategories.toList()
+    final cats = expenseCategories.where((c) => !c.saving).toList()
       ..sort((a, b) {
         final ab = state.budgets.containsKey(a.key) ? 0 : 1;
         final bb = state.budgets.containsKey(b.key) ? 0 : 1;

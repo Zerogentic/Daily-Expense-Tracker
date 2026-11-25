@@ -42,7 +42,10 @@ class SettingsScreen extends StatelessWidget {
                     ListTile(
                       leading: CategoryIcon(c, size: 36),
                       title: Text(c.label),
-                      subtitle: c.custom
+                      subtitle: c.saving
+                          ? Text(c.income ? 'Money back from savings · not income' : 'Savings · not spending',
+                              style: const TextStyle(color: AppColors.accent, fontSize: 12))
+                          : c.custom
                           ? const Text('Your category', style: TextStyle(color: AppColors.muted, fontSize: 12))
                           : (categoryOverrides.containsKey(c.key)
                               ? const Text('Edited', style: TextStyle(color: AppColors.muted, fontSize: 12))

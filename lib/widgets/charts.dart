@@ -225,18 +225,22 @@ class FlowBars extends StatelessWidget {
     super.key,
     required this.spent,
     required this.received,
+    this.saved,
     required this.labels,
     this.height = 150,
   });
 
   final List<double> spent;
   final List<double> received;
+
+  /// Money put into savings per month, drawn as a third bar.
+  final List<double>? saved;
   final List<String> labels;
   final double height;
 
   @override
   Widget build(BuildContext context) {
-    final maxV = [...spent, ...received].fold<double>(0, math.max);
+    final maxV = [...spent, ...received, ...?saved].fold<double>(0, math.max);
     final barArea = height - 28;
     double h(double v) => maxV <= 0 ? 3 : math.max(3, barArea * v / maxV);
 
@@ -257,6 +261,10 @@ class FlowBars extends StatelessWidget {
                       _bar(h(spent[i]), AppColors.spend, i == spent.length - 1),
                       const SizedBox(width: 4),
                       _bar(h(received[i]), AppColors.receive, i == spent.length - 1),
+                      if (saved != null) ...[
+                        const SizedBox(width: 4),
+                        _bar(h(saved![i]), AppColors.accent, i == spent.length - 1),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 8),

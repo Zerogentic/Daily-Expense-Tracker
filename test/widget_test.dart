@@ -62,4 +62,22 @@ void main() {
     final back = RefundLink.fromMap(link.toMap());
     expect([back.id, back.expenseId, back.incomeId, back.amount], [7, 1, 2, 499.5]);
   });
+  test('Investments count as savings, not spending or income', () {
+    final sip = Txn(amount: 5000, type: TxnType.debit, category: 'investments', date: DateTime(2026, 11, 5));
+    expect(sip.countsAsSpend, isFalse);
+    expect(sip.countsAsSaving, isTrue);
+    final back = Txn(amount: 20000, type: TxnType.credit, category: 'redemption', date: DateTime(2026, 11, 20));
+    expect(back.countsAsIncome, isFalse);
+    expect(back.countsAsWithdrawal, isTrue);
+    expect(
+        Categorizer.categorize(merchant: '', text: 'Rs 5,000 debited from A/c XX1234 towards SIP ICCL NACH', type: TxnType.debit),
+        'investments');
+    expect(Categorizer.categorize(merchant: '', text: 'Rs 10,000 debited for PPF deposit', type: TxnType.debit), 'deposits');
+    expect(Categorizer.categorize(merchant: 'Groww', text: '', type: TxnType.credit), 'redemption');
+    expect(Categorizer.categorize(merchant: '', text: 'FD 1234 matured, Rs 1,05,000 credited', type: TxnType.credit),
+        'redemption');
+    // Ordinary spending and income are unchanged.
+    expect(Categorizer.categorize(merchant: 'Swiggy', text: '', type: TxnType.debit), 'food');
+    expect(Categorizer.categorize(merchant: '', text: 'NEFT SALARY ACME', type: TxnType.credit), 'salary');
+  });
 }
