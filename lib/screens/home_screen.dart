@@ -327,7 +327,8 @@ class _HeroCard extends StatelessWidget {
                     Expanded(
                       child: _FlowPill(
                         icon: Icons.savings_rounded,
-                        label: rate == null || rate <= 0 ? 'Invested' : 'Invested · ${(rate * 100).round()}%',
+                        label: 'Invested',
+                        note: rate == null || rate <= 0 ? null : '${(rate * 100).round()}% of income',
                         value: '${invested < 0 ? '−' : ''}${money(invested.abs())}',
                         color: AppColors.accent2,
                       ),
@@ -353,42 +354,54 @@ class _HeroCard extends StatelessWidget {
 }
 
 class _FlowPill extends StatelessWidget {
-  const _FlowPill({required this.icon, required this.label, required this.value, required this.color});
+  const _FlowPill({required this.icon, required this.label, required this.value, required this.color, this.note});
 
   final IconData icon;
   final String label;
   final String value;
   final Color color;
 
+  /// Small line under the amount, e.g. "22% of income".
+  final String? note;
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.fromLTRB(10, 10, 8, 10),
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.22),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(color: color.withValues(alpha: 0.18), shape: BoxShape.circle),
-            child: Icon(icon, size: 16, color: color),
+          Row(
+            children: [
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 11.5, color: Color(0xFFB7C4E6), fontWeight: FontWeight.w500)),
+              ),
+            ],
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: const TextStyle(fontSize: 11.5, color: Color(0xFFB7C4E6))),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: color)),
-                ),
-              ],
+          const SizedBox(height: 6),
+          SizedBox(
+            width: double.infinity,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: color)),
             ),
+          ),
+          SizedBox(
+            height: 15,
+            child: Text(note ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 10.5, color: Color(0xFFB7C4E6))),
           ),
         ],
       ),

@@ -40,6 +40,18 @@ jobs:
       - name: Run tests
         run: flutter test
 
+      - name: Render screenshots
+        continue-on-error: true
+        run: flutter test test_screens --update-goldens
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: test_screens/goldens/
+          if-no-files-found: ignore
+
       - name: Build APK
         run: flutter build apk --release --build-number=${{ github.run_number }}
 
