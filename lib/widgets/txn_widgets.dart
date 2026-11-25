@@ -508,11 +508,10 @@ class _TxnDetails extends StatelessWidget {
             }),
             if (txn.account.isNotEmpty) _row('Account', txn.account),
             const SizedBox(height: 4),
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.surface2,
-                borderRadius: BorderRadius.circular(14),
-              ),
+            Material(
+              color: AppColors.surface2,
+              borderRadius: BorderRadius.circular(14),
+              clipBehavior: Clip.antiAlias,
               child: SwitchListTile(
                 value: !txn.excluded,
                 activeThumbColor: AppColors.accent,
