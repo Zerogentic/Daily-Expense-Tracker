@@ -50,4 +50,11 @@ void main() {
       'income',
     );
   });
+
+  test('Uncategorised transactions show as Unknown', () {
+    expect(categoryFor('other').label, 'Unknown');
+    expect(categoryFor('income').label, 'Unknown');
+    expect(categoryFor('misc').label, 'Other');
+    expect(categoryFor('no-such-category').label, 'Unknown');
+  });
 }

@@ -215,6 +215,7 @@ const List<IconData> categoryIconChoices = [
   Icons.credit_card_rounded,
   Icons.work_rounded,
   Icons.replay_rounded,
+  Icons.help_outline_rounded,
 ];
 
 const List<Color> categoryColorChoices = [
@@ -241,6 +242,7 @@ const List<Color> categoryColorChoices = [
   Color(0xFF7DD3FC),
   Color(0xFF9CA3AF),
   Color(0xFF818CF8),
+  Color(0xFFA8A29E),
 ];
 
 const List<Category> builtInCategories = [
@@ -259,10 +261,14 @@ const List<Category> builtInCategories = [
   Category('cash', 'Cash withdrawal', Icons.payments_rounded, Color(0xFF86EFAC)),
   Category('transfers', 'Transfers', Icons.swap_horiz_rounded, Color(0xFF7DD3FC)),
   Category('card_payment', 'Card bill payment', Icons.credit_card_rounded, Color(0xFF818CF8)),
-  Category('other', 'Other', Icons.category_rounded, Color(0xFF9CA3AF)),
+  Category('misc', 'Other', Icons.category_rounded, Color(0xFFA8A29E)),
+  // Not categorised yet: the app couldn't tell and the user hasn't picked one.
+  Category('other', 'Unknown', Icons.help_outline_rounded, Color(0xFF9CA3AF)),
   Category('salary', 'Salary', Icons.work_rounded, Color(0xFF34D399), income: true),
   Category('refund', 'Refunds & cashback', Icons.replay_rounded, Color(0xFF22D3EE), income: true),
-  Category('income', 'Other income', Icons.savings_rounded, Color(0xFF4ADE80), income: true),
+  Category('misc_income', 'Other income', Icons.savings_rounded, Color(0xFF4ADE80), income: true),
+  // Money in that isn't categorised yet.
+  Category('income', 'Unknown', Icons.help_outline_rounded, Color(0xFF9CA3AF), income: true),
   Category('transfers_in', 'Transfers in', Icons.swap_horiz_rounded, Color(0xFF7DD3FC), income: true),
 ];
 

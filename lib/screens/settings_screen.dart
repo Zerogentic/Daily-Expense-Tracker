@@ -56,7 +56,7 @@ class SettingsScreen extends StatelessWidget {
                                 final ok = await confirm(
                                   context,
                                   'Delete ${c.label}?',
-                                  'Its transactions move to ${c.income ? 'Other income' : 'Other'}.',
+                                  'Its transactions move to Unknown.',
                                 );
                                 if (ok) await state.deleteCategory(c);
                               },
