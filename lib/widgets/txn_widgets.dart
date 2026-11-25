@@ -40,7 +40,7 @@ class TxnTile extends StatelessWidget {
     final subtitle = [
       if (refunded > 0)
         refunded >= txn.amount - 0.005 ? 'Fully refunded' : 'Refunded ${money(refunded)}',
-      if (!txn.isExpense && state.usedAsRefund(txn) > 0) 'Refund',
+      if (!txn.isExpense && state.usedAsRefund(txn) > 0 && txn.category != 'refund') 'Refund',
       if (txn.excluded) 'Not counted',
       cat.label,
       if (txn.account.isNotEmpty) txn.account,
@@ -477,15 +477,22 @@ class _TxnDetails extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 20),
-            Text(
-              '${txn.isExpense ? '−' : '+'}${money(state.netAmount(txn))}',
-              style: TextStyle(
-                fontSize: 34,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.5,
-                color: txn.isExpense ? AppColors.spend : AppColors.receive,
-              ),
-            ),
+            Builder(builder: (context) {
+              final net = state.netAmount(txn);
+              final gone = net <= 0;
+              return Text(
+                '${txn.isExpense ? '−' : '+'}${money(gone ? txn.amount : net)}',
+                style: TextStyle(
+                  fontSize: 34,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.5,
+                  color: gone
+                      ? AppColors.muted
+                      : (txn.isSaving ? AppColors.accent : (txn.isExpense ? AppColors.spend : AppColors.receive)),
+                  decoration: gone ? TextDecoration.lineThrough : null,
+                ),
+              );
+            }),
             if (state.netAmount(txn) < txn.amount - 0.005)
               Padding(
                 padding: const EdgeInsets.only(top: 4),

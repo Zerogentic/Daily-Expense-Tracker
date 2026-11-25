@@ -224,10 +224,8 @@ class _HeroCard extends StatelessWidget {
           colors: [Color(0xFF1A3A8F), Color(0xFF0F1C40), Color(0xFF0B1226)],
           stops: [0, 0.55, 1],
         ),
-        boxShadow: [
-          BoxShadow(color: AppColors.accent.withValues(alpha: 0.18), blurRadius: 32, offset: const Offset(0, 12)),
-        ],
       ),
+      clipBehavior: Clip.antiAlias,
       child: Stack(
         children: [
           Positioned(
@@ -328,7 +326,7 @@ class _HeroCard extends StatelessWidget {
                       child: _FlowPill(
                         icon: Icons.savings_rounded,
                         label: 'Invested',
-                        note: rate == null || rate <= 0 ? null : '${(rate * 100).round()}% of income',
+                        note: rate == null || rate <= 0 ? null : '${(rate * 100).round()}% saved',
                         value: '${invested < 0 ? '−' : ''}${money(invested.abs())}',
                         color: AppColors.accent2,
                       ),
