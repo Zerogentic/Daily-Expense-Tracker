@@ -54,7 +54,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
           t.amount.toStringAsFixed(0).contains(q);
     }).toList();
 
-    final total = list.fold<double>(0, (s, t) => s + (t.countsAsSpend ? t.amount : 0));
+    final total = list.fold<double>(0, (s, t) => s + (t.countsAsSpend ? state.counted(t) : 0));
 
     // Group by calendar day.
     final groups = <DateTime, List<Txn>>{};
@@ -155,8 +155,9 @@ class _DayTotal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final out = txns.where((t) => t.countsAsSpend).fold<double>(0, (s, t) => s + t.amount);
-    final inn = txns.where((t) => t.countsAsIncome).fold<double>(0, (s, t) => s + t.amount);
+    final state = AppScope.of(context);
+    final out = txns.where((t) => t.countsAsSpend).fold<double>(0, (s, t) => s + state.counted(t));
+    final inn = txns.where((t) => t.countsAsIncome).fold<double>(0, (s, t) => s + state.counted(t));
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [

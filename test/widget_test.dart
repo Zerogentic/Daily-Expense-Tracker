@@ -57,4 +57,9 @@ void main() {
     expect(categoryFor('misc').label, 'Other');
     expect(categoryFor('no-such-category').label, 'Unknown');
   });
+  test('Refund links survive a save and load', () {
+    const link = RefundLink(id: 7, expenseId: 1, incomeId: 2, amount: 499.5);
+    final back = RefundLink.fromMap(link.toMap());
+    expect([back.id, back.expenseId, back.incomeId, back.amount], [7, 1, 2, 499.5]);
+  });
 }

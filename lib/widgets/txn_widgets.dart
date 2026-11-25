@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../format.dart';
 import '../models.dart';
@@ -34,7 +35,12 @@ class TxnTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cat = categoryFor(txn.category);
+    final state = AppScope.of(context);
+    final refunded = txn.isExpense ? state.refundedFor(txn) : 0.0;
     final subtitle = [
+      if (refunded > 0)
+        refunded >= txn.amount - 0.005 ? 'Fully refunded' : 'Refunded ${money(refunded)}',
+      if (!txn.isExpense && state.usedAsRefund(txn) > 0) 'Refund',
       if (txn.excluded) 'Not counted',
       cat.label,
       if (txn.account.isNotEmpty) txn.account,
@@ -471,6 +477,8 @@ class _TxnDetails extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             if (txn.note.isNotEmpty) _row('Note', txn.note),
+            if (txn.isExpense) _RefundsSection(txn: txn),
+            if (!txn.isExpense && state.refundedExpensesOf(txn).isNotEmpty) _RefundOfSection(txn: txn),
             const SizedBox(height: 24),
             Row(
               children: [
@@ -687,4 +695,328 @@ Future<void> renamePayee(BuildContext context, Txn txn) async {
   }
   await state.renamePayee(txn, name, all: all);
   messenger.showSnackBar(SnackBar(content: Text('Saved as ${name.trim()}.')));
+}
+
+// ---------------- Refunds ----------------
+
+class _RefundsSection extends StatelessWidget {
+  const _RefundsSection({required this.txn});
+
+  final Txn txn;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    final links = state.refundsOf(txn);
+    final refunded = state.refundedFor(txn);
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 6, 6),
+        decoration: BoxDecoration(color: AppColors.surface2, borderRadius: BorderRadius.circular(14)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.replay_rounded, size: 18, color: AppColors.receive),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text('Refunds', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.text)),
+                ),
+                if (refunded > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Text('You paid ${money(state.remainingToRefund(txn))}',
+                        style: const TextStyle(fontSize: 12.5, color: AppColors.muted, fontWeight: FontWeight.w600)),
+                  ),
+              ],
+            ),
+            if (links.isEmpty)
+              const Padding(
+                padding: EdgeInsets.only(top: 6, right: 8),
+                child: Text('Got money back for this? Link the refund so it comes off your spending.',
+                    style: TextStyle(fontSize: 12.5, color: AppColors.muted)),
+              ),
+            for (final (income, link) in links)
+              Row(
+                children: [
+                  Expanded(
+                    child: Text('${dayMonth(income.date)} · ${income.title}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13, color: AppColors.text)),
+                  ),
+                  Text('+${money(link.amount)}',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.receive)),
+                  IconButton(
+                    tooltip: 'Unlink',
+                    icon: const Icon(Icons.link_off_rounded, size: 18, color: AppColors.muted),
+                    onPressed: () => state.unlinkRefund(link),
+                  ),
+                ],
+              ),
+            if (state.remainingToRefund(txn) > 0)
+              TextButton.icon(
+                onPressed: () => linkRefundFlow(context, txn),
+                icon: const Icon(Icons.add_link_rounded, size: 18),
+                label: Text(links.isEmpty ? 'Link a refund' : 'Link another refund'),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// On an income: which expenses it refunds, and how much still counts as income.
+class _RefundOfSection extends StatelessWidget {
+  const _RefundOfSection({required this.txn});
+
+  final Txn txn;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    final links = state.refundedExpensesOf(txn);
+    final left = state.availableToLink(txn);
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 6, 6),
+        decoration: BoxDecoration(color: AppColors.surface2, borderRadius: BorderRadius.circular(14)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.replay_rounded, size: 18, color: AppColors.receive),
+                SizedBox(width: 8),
+                Text('Refund for', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.text)),
+              ],
+            ),
+            for (final (expense, link) in links)
+              Row(
+                children: [
+                  Expanded(
+                    child: Text('${dayMonth(expense.date)} · ${expense.title}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13, color: AppColors.text)),
+                  ),
+                  Text(money(link.amount),
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text)),
+                  IconButton(
+                    tooltip: 'Unlink',
+                    icon: const Icon(Icons.link_off_rounded, size: 18, color: AppColors.muted),
+                    onPressed: () => state.unlinkRefund(link),
+                  ),
+                ],
+              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(0, 4, 8, 8),
+              child: Text(
+                left > 0 ? '${money(left)} of this still counts as income.' : 'None of this counts as income.',
+                style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Lets the user pick income from the 90 days after [expense] (or add one by
+/// hand) and link it, fully or partly, as a refund.
+Future<void> linkRefundFlow(BuildContext context, Txn expense) async {
+  final state = AppScope.read(context);
+  final messenger = ScaffoldMessenger.of(context);
+  final candidates = state.refundCandidates(expense);
+  final until = expense.date.add(const Duration(days: 90));
+
+  final picked = await showModalBottomSheet<Object>(
+    context: context,
+    backgroundColor: AppColors.surface,
+    showDragHandle: true,
+    isScrollControlled: true,
+    constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+    builder: (ctx) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 0, 20, 4),
+            child: Text('Link a refund',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.text)),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+            child: Text(
+              'Money you received from ${dayMonth(expense.date)} to ${dayMonth(until)}. '
+              'Pick the one that refunded ${expense.title} (${money(expense.amount)}).',
+              style: const TextStyle(fontSize: 13, color: AppColors.muted, height: 1.4),
+            ),
+          ),
+          if (candidates.isEmpty)
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 16, 20, 16),
+              child: Text('No money received in that period is available to link.',
+                  textAlign: TextAlign.center, style: TextStyle(color: AppColors.muted)),
+            )
+          else
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                children: [
+                  for (final c in candidates)
+                    ListTile(
+                      leading: CategoryIcon(categoryFor(c.category), size: 36),
+                      title: Text(c.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      subtitle: Text(
+                        [
+                          dayHeader(c.date),
+                          if (state.usedAsRefund(c) > 0) '${money(state.availableToLink(c))} available',
+                        ].join(' · '),
+                        style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
+                      ),
+                      trailing: Text('+${money(c.amount)}',
+                          style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.receive)),
+                      onTap: () => Navigator.pop(ctx, c),
+                    ),
+                ],
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                side: const BorderSide(color: AppColors.border),
+              ),
+              onPressed: () => Navigator.pop(ctx, 'manual'),
+              icon: const Icon(Icons.edit_note_rounded),
+              label: const Text('Add a refund manually'),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (picked == null || !context.mounted) return;
+
+  final remaining = state.remainingToRefund(expense);
+  if (picked is Txn) {
+    final available = state.availableToLink(picked);
+    final max = available < remaining ? available : remaining;
+    final result = await _refundDialog(context,
+        max: max,
+        intro: '${picked.title} sent you ${money(picked.amount)} on ${dayMonth(picked.date)}. '
+            'How much of it was a refund for ${expense.title}?');
+    if (result == null) return;
+    await state.linkRefund(expense, picked, result.amount);
+    messenger.showSnackBar(SnackBar(content: Text('Linked a ${money(result.amount)} refund.')));
+  } else {
+    final result = await _refundDialog(context,
+        max: remaining,
+        manual: true,
+        firstDate: expense.date,
+        intro: 'Record money you got back for ${expense.title}. It is added to Activity as a refund.');
+    if (result == null) return;
+    await state.addManualRefund(expense, amount: result.amount, date: result.date, note: result.note);
+    messenger.showSnackBar(SnackBar(content: Text('Added a ${money(result.amount)} refund.')));
+  }
+}
+
+/// Amount (and for a manual refund, date and note) of a refund.
+Future<({double amount, DateTime date, String note})?> _refundDialog(
+  BuildContext context, {
+  required double max,
+  required String intro,
+  bool manual = false,
+  DateTime? firstDate,
+}) {
+  String fmt(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
+  final amount = TextEditingController(text: fmt(max));
+  final note = TextEditingController();
+  final now = DateTime.now();
+  var date = now;
+  String? error;
+
+  return showDialog<({double amount, DateTime date, String note})>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setDialog) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text(manual ? 'Add a refund' : 'Refund amount'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(intro, style: const TextStyle(color: AppColors.muted, height: 1.4)),
+              const SizedBox(height: 14),
+              TextField(
+                controller: amount,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+                decoration: fieldDecoration('Refund amount').copyWith(
+                  prefixText: '₹ ',
+                  helperText: 'Up to ${money(max)}. Lower it for a partial refund.',
+                  errorText: error,
+                ),
+              ),
+              if (manual) ...[
+                const SizedBox(height: 12),
+                InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () async {
+                    final first = firstDate ?? DateTime(2015);
+                    final picked = await showDatePicker(
+                      context: ctx,
+                      initialDate: date.isBefore(first) ? first : date,
+                      firstDate: DateTime(first.year, first.month, first.day),
+                      lastDate: now,
+                    );
+                    if (picked != null) setDialog(() => date = DateTime(picked.year, picked.month, picked.day, 12));
+                  },
+                  child: InputDecorator(
+                    decoration: fieldDecoration('Date received'),
+                    child: Text(dayHeader(date), style: const TextStyle(color: AppColors.text)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: note,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: fieldDecoration('Note (optional)', hint: 'e.g. Cash back from shop'),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () {
+              final v = double.tryParse(amount.text.trim());
+              if (v == null || v <= 0) {
+                setDialog(() => error = 'Enter an amount');
+                return;
+              }
+              if (v > max + 0.005) {
+                setDialog(() => error = 'Can be at most ${money(max)}');
+                return;
+              }
+              Navigator.pop(ctx, (amount: v, date: date, note: note.text));
+            },
+            child: Text(manual ? 'Add refund' : 'Link refund'),
+          ),
+        ],
+      ),
+    ),
+  );
 }

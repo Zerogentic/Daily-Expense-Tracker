@@ -13,10 +13,11 @@ class AppDb {
     final dir = await getDatabasesPath();
     final db = await openDatabase(
       p.join(dir, 'money.db'),
-      version: 3,
+      version: 4,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) await _upgradeToV2(db);
         if (oldVersion < 3) await _upgradeToV3(db);
+        if (oldVersion < 4) await _upgradeToV4(db);
       },
       onCreate: (db, version) async {
         await db.execute('''
@@ -49,6 +50,7 @@ class AppDb {
         await db.execute('CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT)');
         await _upgradeToV2(db);
         await _upgradeToV3(db);
+        await _upgradeToV4(db);
       },
     );
     return AppDb._(db);
@@ -68,6 +70,26 @@ class AppDb {
   }
 
   /// v3: names the user gave to payees ("raju.k" -> "Raju (plumber)").
+  /// v4: refunds linked to expenses.
+  static Future<void> _upgradeToV4(Database db) async {
+    await db.execute('''
+      CREATE TABLE refunds(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        expense_id INTEGER NOT NULL,
+        income_id INTEGER NOT NULL,
+        amount REAL NOT NULL
+      )''');
+  }
+
+  Future<List<RefundLink>> refunds() async => (await _db.query('refunds')).map(RefundLink.fromMap).toList();
+
+  Future<int> addRefund(RefundLink r) => _db.insert('refunds', r.toMap()..remove('id'));
+
+  Future<void> deleteRefund(int id) => _db.delete('refunds', where: 'id = ?', whereArgs: [id]);
+
+  Future<void> deleteRefundsFor(int txnId) =>
+      _db.delete('refunds', where: 'expense_id = ? OR income_id = ?', whereArgs: [txnId, txnId]);
+
   static Future<void> _upgradeToV3(Database db) async {
     await db.execute('CREATE TABLE aliases(raw TEXT PRIMARY KEY, name TEXT NOT NULL)');
   }
@@ -184,7 +206,7 @@ class AppDb {
       _db.insert('settings', {'key': key, 'value': value}, conflictAlgorithm: ConflictAlgorithm.replace);
 
   Future<void> clearAll() async {
-    for (final table in ['txns', 'budgets', 'bills', 'rules', 'settings', 'categories', 'aliases']) {
+    for (final table in ['txns', 'budgets', 'bills', 'rules', 'settings', 'categories', 'aliases', 'refunds']) {
       await _db.delete(table);
     }
   }

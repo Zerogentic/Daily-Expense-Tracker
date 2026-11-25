@@ -23,6 +23,7 @@ class AppState extends ChangeNotifier {
   Future<void> load() async {
     await _loadCategories();
     txns = await _db.allTxns();
+    await _loadRefunds();
     budgets = await _db.budgets();
     bills = await _db.bills();
     rules = await _db.rules();
@@ -61,26 +62,161 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ---------- Refunds ----------
+  List<RefundLink> refundLinks = [];
+  final Map<int, double> _refundedOf = {};
+  final Map<int, double> _usedOf = {};
+
+  Future<void> _loadRefunds() async {
+    refundLinks = await _db.refunds();
+    _indexRefunds();
+  }
+
+  void _indexRefunds() {
+    _refundedOf.clear();
+    _usedOf.clear();
+    final ids = {for (final t in txns) if (t.id != null) t.id!};
+    for (final r in refundLinks) {
+      if (!ids.contains(r.expenseId) || !ids.contains(r.incomeId)) continue;
+      _refundedOf[r.expenseId] = (_refundedOf[r.expenseId] ?? 0) + r.amount;
+      _usedOf[r.incomeId] = (_usedOf[r.incomeId] ?? 0) + r.amount;
+    }
+  }
+
+  /// Total refunded on an expense.
+  double refundedFor(Txn t) => t.id == null ? 0 : (_refundedOf[t.id] ?? 0);
+
+  /// How much of an income is counted as refunds.
+  double usedAsRefund(Txn t) => t.id == null ? 0 : (_usedOf[t.id] ?? 0);
+
+  /// What a transaction adds to totals. Refunds come off the expense, in the
+  /// expense's month, and the refunded part of an income stops counting as income.
+  double counted(Txn t) {
+    if (t.excluded) return 0;
+    final v = t.isExpense ? t.amount - refundedFor(t) : t.amount - usedAsRefund(t);
+    return v < 0.005 ? 0 : v;
+  }
+
+  double remainingToRefund(Txn expense) {
+    final v = expense.amount - refundedFor(expense);
+    return v < 0.005 ? 0 : v;
+  }
+
+  double availableToLink(Txn income) {
+    final v = income.amount - usedAsRefund(income);
+    return v < 0.005 ? 0 : v;
+  }
+
+  Txn? _txnById(int id) {
+    for (final t in txns) {
+      if (t.id == id) return t;
+    }
+    return null;
+  }
+
+  /// Refunds linked to [expense], each with the income it came from.
+  List<(Txn, RefundLink)> refundsOf(Txn expense) {
+    final out = <(Txn, RefundLink)>[];
+    for (final r in refundLinks) {
+      if (r.expenseId != expense.id) continue;
+      final income = _txnById(r.incomeId);
+      if (income != null) out.add((income, r));
+    }
+    return out;
+  }
+
+  /// Expenses that [income] is a refund for.
+  List<(Txn, RefundLink)> refundedExpensesOf(Txn income) {
+    final out = <(Txn, RefundLink)>[];
+    for (final r in refundLinks) {
+      if (r.incomeId != income.id) continue;
+      final expense = _txnById(r.expenseId);
+      if (expense != null) out.add((expense, r));
+    }
+    return out;
+  }
+
+  /// Money received from the expense date up to 90 days later that could be
+  /// its refund: counted, not already used up, not already linked to it.
+  /// Same payee first, then closest in time.
+  List<Txn> refundCandidates(Txn expense) {
+    final from = DateTime(expense.date.year, expense.date.month, expense.date.day);
+    final to = expense.date.add(const Duration(days: 90));
+    final payee = expense.merchant.toLowerCase().trim();
+    final linked = {for (final r in refundLinks) if (r.expenseId == expense.id) r.incomeId};
+    final list = txns
+        .where((t) =>
+            !t.isExpense &&
+            !t.excluded &&
+            t.id != null &&
+            !linked.contains(t.id) &&
+            !t.date.isBefore(from) &&
+            !t.date.isAfter(to) &&
+            availableToLink(t) > 0)
+        .toList();
+    int rank(Txn t) => payee.isNotEmpty && t.merchant.toLowerCase().trim() == payee ? 0 : 1;
+    list.sort((a, b) {
+      final r = rank(a) - rank(b);
+      if (r != 0) return r;
+      return a.date.difference(expense.date).abs().compareTo(b.date.difference(expense.date).abs());
+    });
+    return list;
+  }
+
+  Future<void> linkRefund(Txn expense, Txn income, double amount) async {
+    if (expense.id == null || income.id == null || amount <= 0) return;
+    final link = RefundLink(expenseId: expense.id!, incomeId: income.id!, amount: amount);
+    final id = await _db.addRefund(link);
+    refundLinks.add(RefundLink(id: id, expenseId: link.expenseId, incomeId: link.incomeId, amount: amount));
+    _indexRefunds();
+    notifyListeners();
+  }
+
+  /// Records a refund that has no matching income: adds it as a refund
+  /// income transaction and links it to [expense].
+  Future<void> addManualRefund(Txn expense, {required double amount, required DateTime date, String note = ''}) async {
+    final income = Txn(
+      amount: amount,
+      type: TxnType.credit,
+      category: 'refund',
+      merchant: expense.merchant,
+      note: note.trim().isEmpty ? 'Refund for ${expense.title}' : note.trim(),
+      date: date,
+    );
+    final id = await _db.insertTxn(income);
+    final saved = income.copyWith(id: id);
+    txns.add(saved);
+    txns.sort((a, b) => b.date.compareTo(a.date));
+    await linkRefund(expense, saved, amount);
+  }
+
+  Future<void> unlinkRefund(RefundLink r) async {
+    if (r.id != null) await _db.deleteRefund(r.id!);
+    refundLinks.removeWhere((x) => x.id == r.id);
+    _indexRefunds();
+    notifyListeners();
+  }
+
   // ---------- Queries ----------
   List<Txn> txnsIn(DateTime m) =>
       txns.where((t) => t.date.year == m.year && t.date.month == m.month).toList();
 
   double spentIn(DateTime m) =>
-      txnsIn(m).where((t) => t.countsAsSpend).fold(0.0, (sum, t) => sum + t.amount);
+      txnsIn(m).where((t) => t.countsAsSpend).fold(0.0, (sum, t) => sum + counted(t));
 
   double receivedIn(DateTime m) =>
-      txnsIn(m).where((t) => t.countsAsIncome).fold(0.0, (sum, t) => sum + t.amount);
+      txnsIn(m).where((t) => t.countsAsIncome).fold(0.0, (sum, t) => sum + counted(t));
 
   double spentInCategory(DateTime m, String category) => txnsIn(m)
       .where((t) => t.countsAsSpend && t.category == category)
-      .fold(0.0, (sum, t) => sum + t.amount);
+      .fold(0.0, (sum, t) => sum + counted(t));
 
   /// Expense categories for the month, largest first.
   List<MapEntry<String, double>> spendByCategory(DateTime m) {
     final totals = <String, double>{};
     for (final t in txnsIn(m)) {
-      if (!t.countsAsSpend) continue;
-      totals[t.category] = (totals[t.category] ?? 0) + t.amount;
+      if (!t.countsAsSpend || counted(t) <= 0) continue;
+      totals[t.category] = (totals[t.category] ?? 0) + counted(t);
     }
     final list = totals.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
     return list;
@@ -103,7 +239,7 @@ class AppState extends ChangeNotifier {
   Txn? biggestExpense(DateTime m) {
     Txn? best;
     for (final t in txnsIn(m)) {
-      if (t.countsAsSpend && (best == null || t.amount > best.amount)) best = t;
+      if (t.countsAsSpend && counted(t) > 0 && (best == null || counted(t) > counted(best))) best = t;
     }
     return best;
   }
@@ -119,7 +255,7 @@ class AppState extends ChangeNotifier {
     final totals = <String, double>{};
     for (final t in txnsIn(m)) {
       if (!t.countsAsSpend || t.merchant.isEmpty) continue;
-      totals[t.merchant] = (totals[t.merchant] ?? 0) + t.amount;
+      totals[t.merchant] = (totals[t.merchant] ?? 0) + counted(t);
     }
     final list = totals.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
     return list.take(limit).toList();
@@ -290,7 +426,10 @@ class AppState extends ChangeNotifier {
   Future<void> deleteTxn(Txn t) async {
     if (t.id == null) return;
     await _db.deleteTxn(t.id!);
+    await _db.deleteRefundsFor(t.id!);
+    refundLinks.removeWhere((r) => r.expenseId == t.id || r.incomeId == t.id);
     txns.removeWhere((x) => x.id == t.id);
+    _indexRefunds();
     notifyListeners();
   }
 
@@ -342,6 +481,8 @@ class AppState extends ChangeNotifier {
     rules = {};
     customCategories.clear();
     categoryOverrides.clear();
+    refundLinks = [];
+    _indexRefunds();
     notifyListeners();
   }
 }

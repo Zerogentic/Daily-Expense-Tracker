@@ -407,7 +407,7 @@ class _Insights extends StatelessWidget {
             icon: Icons.local_fire_department_rounded,
             color: AppColors.spend,
             label: 'Biggest',
-            value: biggest == null ? '—' : money(biggest.amount),
+            value: biggest == null ? '—' : money(state.counted(biggest)),
             detail: biggest?.title,
           ),
         ),

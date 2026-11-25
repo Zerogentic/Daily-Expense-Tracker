@@ -103,6 +103,30 @@ class Txn {
       );
 }
 
+/// Part (or all) of an income transaction counted as a refund of an expense.
+class RefundLink {
+  const RefundLink({this.id, required this.expenseId, required this.incomeId, required this.amount});
+
+  final int? id;
+  final int expenseId;
+  final int incomeId;
+  final double amount;
+
+  Map<String, Object?> toMap() => {
+        if (id != null) 'id': id,
+        'expense_id': expenseId,
+        'income_id': incomeId,
+        'amount': amount,
+      };
+
+  factory RefundLink.fromMap(Map<String, Object?> m) => RefundLink(
+        id: m['id'] as int?,
+        expenseId: m['expense_id'] as int,
+        incomeId: m['income_id'] as int,
+        amount: (m['amount'] as num).toDouble(),
+      );
+}
+
 class Bill {
   const Bill({
     this.id,
