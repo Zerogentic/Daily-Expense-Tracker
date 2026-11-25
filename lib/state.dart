@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show ChangeNotifier;
 import 'package:flutter/widgets.dart';
 
 import 'models.dart';
+import 'services/categorizer.dart';
 import 'services/db.dart';
 
 class AppState extends ChangeNotifier {
@@ -186,6 +187,48 @@ class AppState extends ChangeNotifier {
     }
     notifyListeners();
   }
+
+  /// For each payee, the category used most often in past transactions
+  /// (money out or money in separately). Ties go to the most recent one.
+  /// Catch-all and not-counted transactions don't vote.
+  Map<String, String> learnedCategories(TxnType type) {
+    final counts = <String, Map<String, int>>{};
+    final latest = <String, Map<String, DateTime>>{};
+    for (final t in txns) {
+      if (t.type != type || t.excluded || t.merchant.isEmpty) continue;
+      if (t.category == 'other' || t.category == 'income') continue;
+      final k = t.merchant.toLowerCase().trim();
+      final c = counts.putIfAbsent(k, () => {});
+      c[t.category] = (c[t.category] ?? 0) + 1;
+      final l = latest.putIfAbsent(k, () => {});
+      final seen = l[t.category];
+      if (seen == null || t.date.isAfter(seen)) l[t.category] = t.date;
+    }
+    final result = <String, String>{};
+    counts.forEach((payee, byCategory) {
+      String? best;
+      for (final e in byCategory.entries) {
+        if (best == null) {
+          best = e.key;
+          continue;
+        }
+        final diff = e.value - byCategory[best]!;
+        if (diff > 0 || (diff == 0 && latest[payee]![e.key]!.isAfter(latest[payee]![best]!))) best = e.key;
+      }
+      if (best != null) result[payee] = best;
+    });
+    return result;
+  }
+
+  /// The best category for a new transaction from [merchant].
+  String suggestCategory({required String merchant, required TxnType type, String text = '', Map<String, String>? history}) =>
+      Categorizer.categorize(
+        merchant: merchant,
+        text: text,
+        type: type,
+        rules: rules,
+        history: history ?? learnedCategories(type),
+      );
 
   /// New transactions for [merchant] will be suggested [category].
   Future<void> rememberCategory(String merchant, String category) async {

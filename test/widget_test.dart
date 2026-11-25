@@ -32,4 +32,22 @@ void main() {
     expect(bill.dueDateIn(DateTime(2026, 2)).day, 28);
     expect(bill.dueDateIn(DateTime(2026, 3)).day, 31);
   });
+  test('Past transactions decide the category, if it fits the direction', () {
+    // Swiggy would be food by keyword, but the user files it under groceries.
+    expect(
+      Categorizer.categorize(merchant: 'Swiggy', text: '', type: TxnType.debit, history: {'swiggy': 'groceries'}),
+      'groceries',
+    );
+    // History beats an older "Update all" rule.
+    expect(
+      Categorizer.categorize(
+          merchant: 'Raju', text: '', type: TxnType.debit, rules: {'raju': 'rent'}, history: {'raju': 'health'}),
+      'health',
+    );
+    // An expense category is never applied to money coming in.
+    expect(
+      Categorizer.categorize(merchant: 'Raju', text: '', type: TxnType.credit, history: {'raju': 'rent'}),
+      'income',
+    );
+  });
 }

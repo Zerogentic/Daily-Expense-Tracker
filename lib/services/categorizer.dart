@@ -1,7 +1,9 @@
 import '../models.dart';
 
-/// Picks a category from the merchant and message text. Categories the user
-/// picks by hand are saved as rules and always win next time.
+/// Picks a category for a transaction, in this order:
+/// 1. the category used most often for this payee in past transactions ([history]),
+/// 2. a category the user set for the payee with "Update all" ([rules]),
+/// 3. keywords in the payee name and message text.
 class Categorizer {
   static const Map<String, List<String>> _keywords = {
     'food': [
@@ -41,9 +43,16 @@ class Categorizer {
     required String text,
     required TxnType type,
     Map<String, String> rules = const {},
+    Map<String, String> history = const {},
   }) {
     final m = merchant.toLowerCase().trim();
-    if (m.isNotEmpty && rules.containsKey(m)) return rules[m]!;
+    bool fits(String key) => categoryFor(key).income == (type == TxnType.credit);
+    if (m.isNotEmpty) {
+      final learned = history[m];
+      if (learned != null && fits(learned)) return learned;
+      final rule = rules[m];
+      if (rule != null && fits(rule)) return rule;
+    }
     final hay = '$m ${text.toLowerCase()}';
 
     if (type == TxnType.credit) {

@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 
 import '../format.dart';
 import '../models.dart';
-import '../services/categorizer.dart';
 import '../state.dart';
 import '../theme.dart';
 import '../widgets/txn_widgets.dart';
@@ -59,12 +58,7 @@ class _AddTxnScreenState extends State<AddTxnScreen> {
     if (_categoryTouched) return;
     final text = _merchant.text.trim();
     if (text.isEmpty) return;
-    final guess = Categorizer.categorize(
-      merchant: text,
-      text: '',
-      type: _type,
-      rules: AppScope.read(context).rules,
-    );
+    final guess = AppScope.read(context).suggestCategory(merchant: text, type: _type);
     if (guess != 'other' && guess != 'income' && guess != _category) setState(() => _category = guess);
   }
 
