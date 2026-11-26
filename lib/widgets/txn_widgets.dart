@@ -275,7 +275,8 @@ class CategoryGrid extends StatelessWidget {
                   Text(
                     c.label,
                     textAlign: TextAlign.center,
-                    maxLines: 2,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 11.5,
                       color: selected == c.key ? AppColors.text : AppColors.muted,
