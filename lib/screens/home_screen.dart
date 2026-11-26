@@ -122,7 +122,7 @@ class _Header extends StatelessWidget {
                     const SizedBox(width: 6),
                     _RoundIcon(
                       icon: Icons.chevron_right_rounded,
-                      onTap: state.isCurrentMonth ? null : () => state.shiftMonth(1),
+                      onTap: state.canGoForward ? () => state.shiftMonth(1) : null,
                     ),
                   ],
                 ),

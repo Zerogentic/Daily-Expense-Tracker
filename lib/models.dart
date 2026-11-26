@@ -2,6 +2,26 @@ import 'package:flutter/material.dart';
 
 enum TxnType { debit, credit }
 
+const _monthNames = [
+  ['jan', 'january'], ['feb', 'february'], ['mar', 'march'], ['apr', 'april'], ['may salary', 'salary may', 'salary for may'], ['jun', 'june'],
+  ['jul', 'july'], ['aug', 'august'], ['sep', 'sept', 'september'], ['oct', 'october'], ['nov', 'november'],
+  ['dec', 'december'],
+];
+
+/// Salary credited in the last 5 days of a month, or from the 15th onward
+/// with the next month named in the message ("Sep salary"), pays for the
+/// next month, so it counts there. Salary on the 1st-3rd already does.
+bool salaryCountsNextMonth(Txn t) {
+  if (t.isExpense || t.category != 'salary') return false;
+  final day = t.date.day;
+  final daysInMonth = DateTime(t.date.year, t.date.month + 1, 0).day;
+  if (day > daysInMonth - 5) return true;
+  if (day < 15) return false;
+  final next = DateTime(t.date.year, t.date.month + 1);
+  final text = '${t.merchant} ${t.note} ${t.raw ?? ''}'.toLowerCase();
+  return _monthNames.elementAt(next.month - 1).any((n) => RegExp('(?<![a-z])$n(?![a-z])').hasMatch(text));
+}
+
 class Txn {
   const Txn({
     this.id,
@@ -16,6 +36,7 @@ class Txn {
     this.sourceRef,
     this.raw,
     this.excluded = false,
+    this.countMonth,
   });
 
   final int? id;
@@ -34,6 +55,19 @@ class Txn {
 
   /// Marked by the user as "not an expense" (or not income): kept, but left out of totals.
   final bool excluded;
+
+  /// Month the user chose for this transaction to count in, as yyyymm
+  /// (e.g. 202609); null means the automatic rule decides.
+  final int? countMonth;
+
+  /// The month this transaction counts in. Usually the month it happened,
+  /// but salary paid in the last days of a month counts toward the next one.
+  DateTime get budgetMonth {
+    final chosen = countMonth;
+    if (chosen != null) return DateTime(chosen ~/ 100, chosen % 100);
+    if (salaryCountsNextMonth(this)) return DateTime(date.year, date.month + 1);
+    return DateTime(date.year, date.month);
+  }
 
   bool get isExpense => type == TxnType.debit;
   /// In a savings category (investments, deposits, or money back from them).
@@ -65,6 +99,8 @@ class Txn {
     String? account,
     DateTime? date,
     bool? excluded,
+    int? countMonth,
+    bool clearCountMonth = false,
   }) {
     return Txn(
       id: id ?? this.id,
@@ -79,6 +115,7 @@ class Txn {
       sourceRef: sourceRef,
       raw: raw,
       excluded: excluded ?? this.excluded,
+      countMonth: clearCountMonth ? null : (countMonth ?? this.countMonth),
     );
   }
 
@@ -95,6 +132,7 @@ class Txn {
         'source_ref': sourceRef,
         'raw': raw,
         'excluded': excluded ? 1 : 0,
+        'count_month': countMonth,
       };
 
   factory Txn.fromMap(Map<String, Object?> m) => Txn(
@@ -110,6 +148,7 @@ class Txn {
         sourceRef: m['source_ref'] as String?,
         raw: m['raw'] as String?,
         excluded: ((m['excluded'] as int?) ?? 0) == 1,
+        countMonth: m['count_month'] as int?,
       );
 }
 

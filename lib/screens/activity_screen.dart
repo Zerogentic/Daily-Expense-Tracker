@@ -38,7 +38,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
     final list = state.txns.where((t) {
       if (widget.category != null && t.category != widget.category) return false;
-      if (m != null && (t.date.year != m.year || t.date.month != m.month)) return false;
+      if (m != null && (t.budgetMonth.year != m.year || t.budgetMonth.month != m.month)) return false;
       switch (_filter) {
         case _Filter.spent:
           if (!t.isExpense) return false;

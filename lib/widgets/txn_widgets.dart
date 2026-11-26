@@ -37,7 +37,9 @@ class TxnTile extends StatelessWidget {
     final cat = categoryFor(txn.category);
     final state = AppScope.of(context);
     final refunded = txn.isExpense ? state.refundedFor(txn) : 0.0;
+    final shifted = txn.budgetMonth.year != txn.date.year || txn.budgetMonth.month != txn.date.month;
     final subtitle = [
+      if (shifted) 'Counts in ${monthShort(txn.budgetMonth)}',
       if (refunded > 0)
         refunded >= txn.amount - 0.005 ? 'Fully refunded' : 'Refunded ${money(refunded)}',
       if (!txn.isExpense && state.usedAsRefund(txn) > 0 && txn.category != 'refund') 'Refund',
@@ -561,6 +563,31 @@ class _TxnDetails extends StatelessWidget {
             _row(txn.isExpense ? 'Paid to' : 'From', txn.merchant.isEmpty ? 'Not added' : txn.merchant,
                 action: txn.merchant.isEmpty ? 'Add name' : 'Rename',
                 onAction: () => renamePayee(context, txn)),
+            if (!txn.isExpense && txn.category == 'salary') ...[
+              Material(
+                color: AppColors.surface2,
+                borderRadius: BorderRadius.circular(14),
+                clipBehavior: Clip.antiAlias,
+                child: Builder(builder: (context) {
+                  final next = DateTime(txn.date.year, txn.date.month + 1);
+                  final inNext = txn.budgetMonth.year == next.year && txn.budgetMonth.month == next.month;
+                  return SwitchListTile(
+                    value: inNext,
+                    activeThumbColor: AppColors.accent,
+                    secondary: const Icon(Icons.event_repeat_rounded, color: AppColors.accent),
+                    title: Text('Count in ${monthTitle(next)}'),
+                    subtitle: Text(
+                      inNext
+                          ? 'Paid ${dayMonth(txn.date)} for next month\'s spending'
+                          : 'Counts in ${monthTitle(txn.date)}, when it was paid',
+                      style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
+                    ),
+                    onChanged: (on) => state.setCountMonth(txn, on ? next : DateTime(txn.date.year, txn.date.month)),
+                  );
+                }),
+              ),
+              const SizedBox(height: 8),
+            ],
             _row('Category', cat.label, action: 'Change', onAction: () async {
               final key = await pickCategory(context, income: !txn.isExpense, selected: txn.category);
               if (key != null && key != txn.category && context.mounted) {

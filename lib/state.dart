@@ -60,6 +60,32 @@ class AppState extends ChangeNotifier {
   }
 
   // ---------- Month navigation ----------
+  /// The furthest month there is anything to show: this month, or next
+  /// month once a month-end salary counts toward it.
+  DateTime get latestMonth {
+    final now = DateTime.now();
+    var latest = DateTime(now.year, now.month);
+    for (final t in txns) {
+      final m = t.budgetMonth;
+      if (m.isAfter(latest)) latest = m;
+    }
+    return latest;
+  }
+
+  bool get canGoForward => month.isBefore(latestMonth);
+
+  /// Moves a salary to count in [m] (or back to its automatic month when null).
+  Future<void> setCountMonth(Txn t, DateTime? m) async {
+    final i = txns.indexWhere((x) => x.id == t.id);
+    if (i < 0) return;
+    final updated = m == null
+        ? txns[i].copyWith(clearCountMonth: true)
+        : txns[i].copyWith(countMonth: m.year * 100 + m.month);
+    await _db.updateTxn(updated);
+    txns[i] = updated;
+    notifyListeners();
+  }
+
   bool get isCurrentMonth {
     final now = DateTime.now();
     return month.year == now.year && month.month == now.month;
@@ -68,7 +94,7 @@ class AppState extends ChangeNotifier {
   void shiftMonth(int delta) {
     final next = DateTime(month.year, month.month + delta);
     final now = DateTime.now();
-    if (next.isAfter(DateTime(now.year, now.month))) return;
+    if (next.isAfter(latestMonth)) return;
     month = next;
     notifyListeners();
   }
@@ -255,7 +281,7 @@ class AppState extends ChangeNotifier {
 
   // ---------- Queries ----------
   List<Txn> txnsIn(DateTime m) =>
-      txns.where((t) => t.date.year == m.year && t.date.month == m.month).toList();
+      txns.where((t) => t.budgetMonth.year == m.year && t.budgetMonth.month == m.month).toList();
 
   double spentIn(DateTime m) =>
       txnsIn(m).where((t) => t.countsAsSpend).fold(0.0, (sum, t) => sum + counted(t));

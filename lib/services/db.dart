@@ -13,12 +13,13 @@ class AppDb {
     final dir = await getDatabasesPath();
     final db = await openDatabase(
       p.join(dir, 'money.db'),
-      version: 5,
+      version: 6,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) await _upgradeToV2(db);
         if (oldVersion < 3) await _upgradeToV3(db);
         if (oldVersion < 4) await _upgradeToV4(db);
         if (oldVersion < 5) await _upgradeToV5(db);
+        if (oldVersion < 6) await _upgradeToV6(db);
       },
       onCreate: (db, version) async {
         await db.execute('''
@@ -53,6 +54,7 @@ class AppDb {
         await _upgradeToV3(db);
         await _upgradeToV4(db);
         await _upgradeToV5(db);
+        await _upgradeToV6(db);
       },
     );
     return AppDb._(db);
@@ -72,6 +74,11 @@ class AppDb {
   }
 
   /// v3: names the user gave to payees ("raju.k" -> "Raju (plumber)").
+  /// v6: a transaction can be set to count in a different month.
+  static Future<void> _upgradeToV6(Database db) async {
+    await db.execute('ALTER TABLE txns ADD COLUMN count_month INTEGER');
+  }
+
   /// v5: categories can count as savings.
   static Future<void> _upgradeToV5(Database db) async {
     await db.execute('ALTER TABLE categories ADD COLUMN saving INTEGER NOT NULL DEFAULT 0');

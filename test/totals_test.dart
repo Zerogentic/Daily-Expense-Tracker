@@ -129,4 +129,30 @@ void main() {
     expect(state.receivedIn(month), 800); // the dividend is income, the redemption is not
     expect(state.withdrawnIn(month), 20000);
   });
+
+  test('Month-end salary counts toward the next month', () async {
+    Txn salary(DateTime d, {String note = ''}) =>
+        Txn(amount: 90000, type: TxnType.credit, category: 'salary', merchant: 'Acme', note: note, date: d);
+    expect(salary(DateTime(2026, 8, 30)).budgetMonth, DateTime(2026, 9)); // 'Aug salary' paid on 30 Aug
+    expect(salary(DateTime(2026, 8, 27)).budgetMonth, DateTime(2026, 9));
+    expect(salary(DateTime(2026, 2, 25)).budgetMonth, DateTime(2026, 3)); // last 5 days of a short month
+    expect(salary(DateTime(2026, 8, 20)).budgetMonth, DateTime(2026, 8));
+    expect(salary(DateTime(2026, 8, 20), note: 'Sep salary advance').budgetMonth, DateTime(2026, 9));
+    expect(salary(DateTime(2026, 9, 1)).budgetMonth, DateTime(2026, 9));
+    expect(salary(DateTime(2026, 12, 30)).budgetMonth, DateTime(2027, 1));
+    // Only salary moves.
+    expect(Txn(amount: 500, type: TxnType.credit, category: 'misc_income', date: DateTime(2026, 8, 30)).budgetMonth,
+        DateTime(2026, 8));
+    expect(Txn(amount: 500, type: TxnType.debit, category: 'rent', date: DateTime(2026, 8, 30)).budgetMonth,
+        DateTime(2026, 8));
+
+    final aug = DateTime(2026, 8), sep = DateTime(2026, 9);
+    final paid = await add('Acme Payroll', 90000, TxnType.credit, 'salary', DateTime(2026, 8, 30, 10));
+    expect(state.receivedIn(aug), 0);
+    expect(state.receivedIn(sep), 90000);
+    // The user can keep it in August instead.
+    await state.setCountMonth(paid, aug);
+    expect(state.receivedIn(aug), 90000);
+    expect(state.receivedIn(sep), 0);
+  });
 }
