@@ -5,13 +5,23 @@ import '../models.dart';
 /// 2. a category the user set for the payee with "Update all" ([rules]),
 /// 3. keywords in the payee name and message text.
 class Categorizer {
+  /// Fund houses, clearing houses and brokers, as bank SMS write them.
+  /// Money to them is investing; money back from them is a withdrawal, not income.
+  static const _investPlatforms = [
+    'mutual fund', 'mutual funds', 'mf', 'asset management', 'asset mgmt', 'iccl', 'indian clearing',
+    'clearing corp', 'clearing corporation', 'nse clearing', 'nsccl', 'bse limited', 'bse ltd', 'bse star',
+    'bsestarmf', 'nse mf', 'nsemf', 'cams', 'camsonline', 'kfintech', 'kfin', 'karvy', 'zerodha', 'groww',
+    'nextbillion', 'upstox', 'rksv', 'angel one', 'angel broking', 'kuvera', 'paytm money', 'smallcase',
+    'et money', 'etmoney', 'indmoney', 'coin by zerodha', 'securities', 'broking', 'stock broking',
+    'share broking', 'capital markets', 'icicidirect', 'motilal oswal', 'sharekhan', '5paisa', 'fyers', 'iifl',
+    'geojit', 'nuvama', 'edelweiss', 'moneylicious', 'mirae asset', 'ppfas', 'parag parikh', 'nippon india',
+  ];
+
   static const Map<String, List<String>> _keywords = {
     // Checked first: SIP auto-debits mention the clearing house or fund platform.
     'investments': [
-      'mutual fund', 'sip', 'iccl', 'indian clearing', 'bse limited', 'bse star', 'bsestarmf', 'nse clearing',
-      'nsccl', 'nse mf', 'cams', 'camsonline', 'kfintech', 'kfin', 'karvy', 'zerodha', 'groww', 'upstox',
-      'angel one', 'angel broking', 'kuvera', 'paytm money', 'smallcase', 'et money', 'etmoney', 'indmoney',
-      'coin by zerodha', 'digital gold', 'safegold', 'augmont', 'sgb', 'sovereign gold', 'stocks', 'demat'
+      ..._investPlatforms,
+      'sip', 'digital gold', 'safegold', 'augmont', 'sgb', 'sovereign gold', 'stocks', 'demat'
     ],
     'deposits': [
       'fixed deposit', 'recurring deposit', 'term deposit', 'fd booking', 'fd opening', 'rd instalment',
@@ -80,8 +90,7 @@ class Categorizer {
       // Money back from investments or deposits is your own savings returning, not income.
       const withdrawals = [
         'redemption', 'redeemed', 'redeem', 'maturity', 'matured', 'premature closure', 'fd closure', 'fd closed',
-        'mutual fund', 'iccl', 'indian clearing', 'nse clearing', 'nsccl', 'bse limited', 'zerodha', 'groww',
-        'upstox', 'kfintech', 'cams',
+        'funds withdrawal', 'fund withdrawal', 'payout', ..._investPlatforms,
       ];
       if (withdrawals.any((w) => RegExp('(?<![a-z])${RegExp.escape(w)}(?![a-z])').hasMatch(hay))) return 'redemption';
       return 'income';
