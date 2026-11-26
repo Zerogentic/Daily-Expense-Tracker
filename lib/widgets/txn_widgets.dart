@@ -173,6 +173,7 @@ Future<String?> pickCategory(BuildContext context, {required bool income, String
                     icon: const Icon(Icons.add_rounded, size: 20),
                     label: const Text('New category', style: TextStyle(fontWeight: FontWeight.w700)),
                   ),
+                  IconButton(tooltip: 'Close', onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close_rounded, color: AppColors.muted)),
                 ],
               ),
             ),
@@ -300,8 +301,16 @@ Future<String?> createCategory(BuildContext context, {required bool income, Cate
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(existing != null ? 'Edit category' : (income ? 'New income category' : 'New expense category'),
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.text)),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                          existing != null ? 'Edit category' : (income ? 'New income category' : 'New expense category'),
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.text)),
+                    ),
+                    IconButton(tooltip: 'Close', onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close_rounded, color: AppColors.muted)),
+                  ],
+                ),
                 const SizedBox(height: 16),
                 Row(
                   children: [
@@ -430,13 +439,16 @@ Future<String?> createCategory(BuildContext context, {required bool income, Cate
 }
 
 Future<void> showTxnDetails(BuildContext context, Txn txn) {
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: AppColors.surface,
-    showDragHandle: true,
-    builder: (ctx) => _TxnDetails(txnId: txn.id),
-  );
+  return Navigator.of(context).push(MaterialPageRoute<void>(
+    builder: (_) => Scaffold(
+      appBar: AppBar(
+        backgroundColor: AppColors.bg,
+        surfaceTintColor: Colors.transparent,
+        title: Text(txn.isExpense ? 'Expense' : 'Money received'),
+      ),
+      body: _TxnDetails(txnId: txn.id),
+    ),
+  ));
 }
 
 class _TxnDetails extends StatelessWidget {
@@ -454,7 +466,7 @@ class _TxnDetails extends StatelessWidget {
 
     return SafeArea(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -562,9 +574,7 @@ class _TxnDetails extends StatelessWidget {
                   child: FilledButton.icon(
                     style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
                     onPressed: () {
-                      final nav = Navigator.of(context);
-                      nav.pop();
-                      nav.push(MaterialPageRoute(builder: (_) => AddTxnScreen(existing: txn)));
+                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => AddTxnScreen(existing: txn)));
                     },
                     icon: const Icon(Icons.edit_rounded),
                     label: const Text('Edit'),
@@ -903,10 +913,17 @@ Future<void> linkRefundFlow(BuildContext context, Txn expense) async {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(20, 0, 20, 4),
-            child: Text('Link a refund',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.text)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 8, 4),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text('Link a refund',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.text)),
+                ),
+                IconButton(tooltip: 'Close', onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close_rounded, color: AppColors.muted)),
+              ],
+            ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),

@@ -192,8 +192,15 @@ Future<void> editBill(BuildContext context, {Bill? existing}) async {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(existing == null ? 'Add a bill' : 'Edit bill',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.text)),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(existing == null ? 'Add a bill' : 'Edit bill',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.text)),
+                ),
+                IconButton(tooltip: 'Close', onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close_rounded, color: AppColors.muted)),
+              ],
+            ),
             const SizedBox(height: 16),
             TextField(
               controller: name,

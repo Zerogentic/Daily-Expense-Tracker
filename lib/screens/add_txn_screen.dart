@@ -119,6 +119,11 @@ class _AddTxnScreenState extends State<AddTxnScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.bg,
         surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          tooltip: 'Close',
+          icon: const Icon(Icons.close_rounded),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: Text(_editing ? 'Edit transaction' : 'Add transaction'),
       ),
       body: SafeArea(

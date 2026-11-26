@@ -211,7 +211,6 @@ class _HeroCard extends StatelessWidget {
     final fraction = (b == null || b <= 0) ? 0.0 : spent / b;
     final m = state.month;
     final invested = state.netSavedIn(m);
-    final rate = state.savingsRate(m);
     final net = received - spent - invested;
 
     return Container(
@@ -311,37 +310,7 @@ class _HeroCard extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 18),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _FlowPill(
-                        icon: Icons.south_west_rounded,
-                        label: 'Received',
-                        value: money(received),
-                        color: AppColors.receive,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _FlowPill(
-                        icon: Icons.savings_rounded,
-                        label: 'Invested',
-                        note: rate == null || rate <= 0 ? null : '${(rate * 100).round()}% saved',
-                        value: '${invested < 0 ? '−' : ''}${money(invested.abs())}',
-                        color: AppColors.accent2,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _FlowPill(
-                        icon: net < 0 ? Icons.trending_down_rounded : Icons.trending_up_rounded,
-                        label: 'Left over',
-                        value: '${net < 0 ? '−' : '+'}${money(net.abs())}',
-                        color: net < 0 ? AppColors.spend : AppColors.receive,
-                      ),
-                    ),
-                  ],
-                ),
+                _MoneySplit(received: received, spent: spent, invested: invested, left: net),
               ],
             ),
           ),
@@ -351,56 +320,104 @@ class _HeroCard extends StatelessWidget {
   }
 }
 
-class _FlowPill extends StatelessWidget {
-  const _FlowPill({required this.icon, required this.label, required this.value, required this.color, this.note});
+/// Where the month's money went, as an equation that visibly adds up:
+/// Received = Spent + Invested + Left over.
+class _MoneySplit extends StatelessWidget {
+  const _MoneySplit({required this.received, required this.spent, required this.invested, required this.left});
 
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
+  final double received;
+  final double spent;
 
-  /// Small line under the amount, e.g. "22% of income".
-  final String? note;
+  /// Net of money taken back out of savings; negative when more came out than went in.
+  final double invested;
+
+  /// Received - spent - invested; negative when spending went past what came in.
+  final double left;
 
   @override
   Widget build(BuildContext context) {
+    const soft = Color(0xFFB7C4E6);
+    final putIn = invested > 0 ? invested : 0.0;
+    final scale = [received, spent + putIn].reduce((a, b) => a > b ? a : b);
+    int flex(double v) => scale <= 0 || v <= 0 ? 0 : (v / scale * 1000).round().clamp(1, 1000).toInt();
+    String share(double v) => received <= 0 || v <= 0 ? '' : '${(v / received * 100).round()}%';
+
+    Widget row(Color color, String label, String value, {String note = '', bool strong = false}) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 9),
+        child: Row(
+          children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3)),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(label,
+                  style: TextStyle(
+                      fontSize: 13.5,
+                      color: strong ? Colors.white : soft,
+                      fontWeight: strong ? FontWeight.w700 : FontWeight.w500)),
+            ),
+            if (note.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(right: 10),
+                child: Text(note, style: const TextStyle(fontSize: 12, color: soft)),
+              ),
+            Text(value, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: color)),
+          ],
+        ),
+      );
+    }
+
+    final bars = [
+      if (flex(spent) > 0) Expanded(flex: flex(spent), child: Container(color: AppColors.spend)),
+      if (flex(putIn) > 0) Expanded(flex: flex(putIn), child: Container(color: AppColors.accent2)),
+      if (flex(left) > 0) Expanded(flex: flex(left), child: Container(color: AppColors.receive)),
+    ];
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(10, 10, 8, 10),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.22),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Icon(icon, size: 14, color: color),
-              const SizedBox(width: 5),
-              Expanded(
-                child: Text(label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 11.5, color: Color(0xFFB7C4E6), fontWeight: FontWeight.w500)),
+              const Icon(Icons.south_west_rounded, size: 15, color: AppColors.receive),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text('Received this month',
+                    style: TextStyle(fontSize: 13, color: soft, fontWeight: FontWeight.w600)),
               ),
+              Text(money(received),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.receive)),
             ],
           ),
-          const SizedBox(height: 6),
-          SizedBox(
-            width: double.infinity,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: color)),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: SizedBox(
+              height: 8,
+              child: Row(
+                children: bars.isEmpty ? [Expanded(child: Container(color: Colors.white.withValues(alpha: 0.1)))] : bars,
+              ),
             ),
           ),
-          SizedBox(
-            height: 15,
-            child: Text(note ?? '',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 10.5, color: Color(0xFFB7C4E6))),
-          ),
+          const SizedBox(height: 2),
+          row(AppColors.spend, 'Spent', money(spent), note: share(spent)),
+          if (invested >= 0)
+            row(AppColors.accent2, 'Invested', money(invested), note: share(invested))
+          else
+            row(AppColors.accent2, 'Taken out of savings', '+${money(-invested)}'),
+          if (left >= 0)
+            row(AppColors.receive, 'Left over', money(left), note: share(left), strong: true)
+          else
+            row(AppColors.bad, 'Spent more than came in', money(-left), strong: true),
         ],
       ),
     );

@@ -88,5 +88,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Amazon').first);
     await shot(tester, '6_refunded_expense');
+    await tester.tap(find.text('Change').first);
+    await shot(tester, '7_category_picker');
   });
 }
