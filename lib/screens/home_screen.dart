@@ -22,7 +22,6 @@ class HomeScreen extends StatelessWidget {
     final m = state.month;
     final spent = state.spentIn(m);
     final received = state.receivedIn(m);
-    final byCat = state.spendByCategory(m);
     final trend = state.spendTrend(6);
     final inTrend = state.receivedTrend(6);
     final recent = state.txnsIn(m).take(5).toList();
@@ -35,8 +34,6 @@ class HomeScreen extends StatelessWidget {
           _Header(state: state),
           const SizedBox(height: 10),
           _HeroCard(state: state, spent: spent, received: received, onSetBudget: onOpenBudgets),
-          const SizedBox(height: 12),
-          _Insights(state: state),
           if (bills.isNotEmpty) ...[
             SectionTitle('Bills due', action: 'All bills', onAction: onOpenBills),
             Panel(
@@ -44,36 +41,8 @@ class HomeScreen extends StatelessWidget {
               child: Column(children: [for (final b in bills) _BillRow(bill: b)]),
             ),
           ],
-          const SectionTitle('Where it went'),
-          if (byCat.isEmpty)
-            const Panel(child: _Empty(icon: Icons.donut_large_rounded, text: 'No spending recorded for this month yet.'))
-          else
-            Panel(
-              child: Column(
-                children: [
-                  _DonutSummary(entries: byCat, total: spent),
-                  const SizedBox(height: 12),
-                  const Divider(height: 1, color: AppColors.border),
-                  const SizedBox(height: 6),
-                  for (final e in byCat.take(6))
-                    _CategoryRow(
-                      category: categoryFor(e.key),
-                      amount: e.value,
-                      fraction: spent <= 0 ? 0 : e.value / spent,
-                      onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => Scaffold(
-                          appBar: AppBar(
-                            backgroundColor: AppColors.bg,
-                            surfaceTintColor: Colors.transparent,
-                            title: Text(categoryFor(e.key).label),
-                          ),
-                          body: ActivityScreen(category: e.key, month: m),
-                        ),
-                      )),
-                    ),
-                ],
-              ),
-            ),
+          const SectionTitle('By category'),
+          _Breakdown(state: state),
           const SectionTitle('Cash flow · last 6 months'),
           Panel(
             child: Column(
@@ -424,82 +393,109 @@ class _MoneySplit extends StatelessWidget {
   }
 }
 
-class _Insights extends StatelessWidget {
-  const _Insights({required this.state});
+/// All categories for the month, grouped into Spent, Invested and Income tabs.
+class _Breakdown extends StatefulWidget {
+  const _Breakdown({required this.state});
 
   final AppState state;
 
   @override
-  Widget build(BuildContext context) {
-    final m = state.month;
-    final biggest = state.biggestExpense(m);
-    final top = state.topMerchants(m, limit: 1);
-    return Row(
-      children: [
-        Expanded(
-          child: _InsightCard(
-            icon: Icons.calendar_view_day_rounded,
-            color: AppColors.accent,
-            label: 'Per day',
-            value: money(state.dailyAverage(m).roundToDouble()),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _InsightCard(
-            icon: Icons.local_fire_department_rounded,
-            color: AppColors.spend,
-            label: 'Biggest',
-            value: biggest == null ? '—' : money(state.counted(biggest)),
-            detail: biggest?.title,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _InsightCard(
-            icon: Icons.storefront_rounded,
-            color: AppColors.accent2,
-            label: 'Top place',
-            value: top.isEmpty ? '—' : top.first.key,
-            detail: top.isEmpty ? null : money(top.first.value),
-          ),
-        ),
-      ],
-    );
-  }
+  State<_Breakdown> createState() => _BreakdownState();
 }
 
-class _InsightCard extends StatelessWidget {
-  const _InsightCard({required this.icon, required this.color, required this.label, required this.value, this.detail});
-
-  final IconData icon;
-  final Color color;
-  final String label;
-  final String value;
-  final String? detail;
+class _BreakdownState extends State<_Breakdown> {
+  Segment _segment = Segment.spent;
 
   @override
   Widget build(BuildContext context) {
-    return Panel(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(height: 10),
-          Text(label, style: const TextStyle(fontSize: 11.5, color: AppColors.muted)),
-          const SizedBox(height: 2),
-          Text(value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.text)),
-          SizedBox(
-            height: 16,
-            child: Text(detail ?? '',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+    final state = widget.state;
+    final m = state.month;
+    final entries = state.breakdown(m, _segment);
+    final positive = entries.where((e) => e.value > 0).toList();
+    final positiveTotal = positive.fold<double>(0, (s, e) => s + e.value);
+
+    Widget tab(Segment s, String label, double amount, Color color) {
+      final selected = s == _segment;
+      return Expanded(
+        child: Material(
+          color: selected ? color.withValues(alpha: 0.14) : Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(color: selected ? color : AppColors.border, width: selected ? 1.5 : 1),
           ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => setState(() => _segment = s),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+              child: Column(
+                children: [
+                  Text(label,
+                      style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: selected ? AppColors.text : AppColors.muted)),
+                  const SizedBox(height: 3),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '${amount < 0 ? '−' : ''}${money(amount.abs())}',
+                      style: TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w800, color: selected ? color : AppColors.text),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final empty = switch (_segment) {
+      Segment.spent => 'No spending recorded for this month yet.',
+      Segment.invested => 'Nothing invested this month. SIPs, stocks, FDs and PPF show up here.',
+      Segment.income => 'No income recorded for this month yet.',
+    };
+
+    return Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              tab(Segment.spent, 'Spent', state.spentIn(m), AppColors.spend),
+              const SizedBox(width: 8),
+              tab(Segment.invested, 'Invested', state.netSavedIn(m), AppColors.accent2),
+              const SizedBox(width: 8),
+              tab(Segment.income, 'Income', state.receivedIn(m), AppColors.receive),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (entries.isEmpty)
+            _Empty(icon: Icons.donut_large_rounded, text: empty)
+          else ...[
+            if (positive.isNotEmpty) _DonutSummary(entries: positive, total: positiveTotal),
+            const SizedBox(height: 12),
+            const Divider(height: 1, color: AppColors.border),
+            const SizedBox(height: 6),
+            for (final e in entries)
+              _CategoryRow(
+                category: categoryFor(e.key),
+                amount: e.value,
+                fraction: positiveTotal <= 0 || e.value <= 0 ? 0 : e.value / positiveTotal,
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => Scaffold(
+                    appBar: AppBar(
+                      backgroundColor: AppColors.bg,
+                      surfaceTintColor: Colors.transparent,
+                      title: Text(categoryFor(e.key).label),
+                    ),
+                    body: ActivityScreen(category: e.key, month: m),
+                  ),
+                )),
+              ),
+          ],
         ],
       ),
     );
@@ -658,7 +654,7 @@ class _CategoryRow extends StatelessWidget {
                         child: Text(category.label,
                             style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.text)),
                       ),
-                      Text(money(amount),
+                      Text('${amount < 0 ? '−' : ''}${money(amount.abs())}',
                           style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.text)),
                     ],
                   ),

@@ -92,4 +92,27 @@ void main() {
     expect(state.savedIn(month), 3000);
     expect(state.spentIn(month), 0);
   });
+
+  test('Each dashboard tab lists every category and adds up to its total', () async {
+    await add('Acme Ltd', 60000, TxnType.credit, 'salary', day(1));
+    await add('Ravi', 2000, TxnType.credit, 'misc_income', day(2));
+    for (final c in ['food', 'groceries', 'transport', 'fuel', 'shopping', 'bills', 'rent', 'health']) {
+      await add('Shop $c', 100, TxnType.debit, c, day(3));
+    }
+    await add('ICCL SIP', 5000, TxnType.debit, 'investments', day(5));
+    await add('Bank FD', 10000, TxnType.debit, 'deposits', day(5));
+    await add('Groww', 1500, TxnType.credit, 'redemption', day(6));
+
+    final spent = state.breakdown(month, Segment.spent);
+    expect(spent.length, 8); // all categories, not just the top six
+    expect(spent.fold<double>(0, (s, e) => s + e.value), state.spentIn(month));
+
+    final invested = Map.fromEntries(state.breakdown(month, Segment.invested));
+    expect(invested, {'deposits': 10000.0, 'investments': 5000.0, 'redemption': -1500.0});
+    expect(invested.values.fold<double>(0, (s, v) => s + v), state.netSavedIn(month));
+
+    final income = state.breakdown(month, Segment.income);
+    expect(income.map((e) => e.key), ['salary', 'misc_income']);
+    expect(income.fold<double>(0, (s, e) => s + e.value), state.receivedIn(month));
+  });
 }

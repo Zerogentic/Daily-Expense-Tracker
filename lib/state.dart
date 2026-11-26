@@ -5,6 +5,9 @@ import 'models.dart';
 import 'services/categorizer.dart';
 import 'services/db.dart';
 
+/// The three groups money is shown in on the dashboard.
+enum Segment { spent, invested, income }
+
 class AppState extends ChangeNotifier {
   AppState(this._db);
 
@@ -277,6 +280,31 @@ class AppState extends ChangeNotifier {
       if (t.countsAsSpend && counted(t) > 0 && (best == null || counted(t) > counted(best))) best = t;
     }
     return best;
+  }
+
+  /// Every category in one group for the month, largest first. Under
+  /// Invested, money taken back out of savings shows as a negative amount.
+  List<MapEntry<String, double>> breakdown(DateTime m, Segment segment) {
+    final totals = <String, double>{};
+    for (final t in txnsIn(m)) {
+      final v = counted(t);
+      if (v <= 0) continue;
+      double? add;
+      switch (segment) {
+        case Segment.spent:
+          if (t.countsAsSpend) add = v;
+        case Segment.invested:
+          if (t.countsAsSaving) {
+            add = v;
+          } else if (t.countsAsWithdrawal) {
+            add = -v;
+          }
+        case Segment.income:
+          if (t.countsAsIncome) add = v;
+      }
+      if (add != null) totals[t.category] = (totals[t.category] ?? 0) + add;
+    }
+    return totals.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
   }
 
   /// Money put into savings and investments in the month.
