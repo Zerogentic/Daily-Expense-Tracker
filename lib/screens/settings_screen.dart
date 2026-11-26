@@ -27,10 +27,10 @@ class SettingsScreen extends StatelessWidget {
             child: Text('Tap a category to rename it or change its icon and colour.',
                 style: TextStyle(color: AppColors.muted, fontSize: 12.5)),
           ),
-          for (final income in [false, true]) ...[
+          for (final group in CategoryGroup.values) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(6, 6, 6, 8),
-              child: Text(income ? 'INCOME' : 'EXPENSES',
+              child: Text(group.title.toUpperCase(),
                   style: const TextStyle(
                       fontSize: 11.5, letterSpacing: 0.8, fontWeight: FontWeight.w700, color: AppColors.muted)),
             ),
@@ -38,19 +38,19 @@ class SettingsScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 6),
               child: Column(
                 children: [
-                  for (final c in income ? incomeCategories : expenseCategories)
+                  for (final c in categoriesIn(group))
                     ListTile(
                       leading: CategoryIcon(c, size: 36),
                       title: Text(c.label),
-                      subtitle: c.saving
-                          ? Text(c.income ? 'Money back from savings · not income' : 'Savings · not spending',
+                      subtitle: group == CategoryGroup.investment
+                          ? Text(c.income ? 'Money back · not income' : 'Money put in · not spending',
                               style: const TextStyle(color: AppColors.accent, fontSize: 12))
                           : c.custom
-                          ? const Text('Your category', style: TextStyle(color: AppColors.muted, fontSize: 12))
-                          : (categoryOverrides.containsKey(c.key)
-                              ? const Text('Edited', style: TextStyle(color: AppColors.muted, fontSize: 12))
-                              : null),
-                      onTap: () => createCategory(context, income: income, existing: c),
+                              ? const Text('Your category', style: TextStyle(color: AppColors.muted, fontSize: 12))
+                              : (categoryOverrides.containsKey(c.key)
+                                  ? const Text('Edited', style: TextStyle(color: AppColors.muted, fontSize: 12))
+                                  : null),
+                      onTap: () => createCategory(context, income: c.income, existing: c),
                       trailing: c.custom
                           ? IconButton(
                               tooltip: 'Delete',
@@ -66,12 +66,24 @@ class SettingsScreen extends StatelessWidget {
                             )
                           : const Icon(Icons.edit_rounded, color: AppColors.muted, size: 20),
                     ),
-                  ListTile(
-                    leading: Icon(Icons.add_circle_outline_rounded,
-                        color: income ? AppColors.receive : AppColors.accent),
-                    title: Text(income ? 'New income category' : 'New expense category'),
-                    onTap: () => createCategory(context, income: income),
-                  ),
+                  if (group == CategoryGroup.investment) ...[
+                    ListTile(
+                      leading: const Icon(Icons.add_circle_outline_rounded, color: AppColors.accent2),
+                      title: const Text('New investment type'),
+                      onTap: () => createCategory(context, income: false, asInvestment: true),
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.add_circle_outline_rounded, color: AppColors.accent2),
+                      title: const Text('New money-back type'),
+                      onTap: () => createCategory(context, income: true, asInvestment: true),
+                    ),
+                  ] else
+                    ListTile(
+                      leading: Icon(Icons.add_circle_outline_rounded,
+                          color: group == CategoryGroup.income ? AppColors.receive : AppColors.accent),
+                      title: Text(group == CategoryGroup.income ? 'New income category' : 'New expense category'),
+                      onTap: () => createCategory(context, income: group == CategoryGroup.income),
+                    ),
                 ],
               ),
             ),

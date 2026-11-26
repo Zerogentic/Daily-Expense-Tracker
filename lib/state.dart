@@ -27,6 +27,10 @@ class AppState extends ChangeNotifier {
     await _loadCategories();
     txns = await _db.allTxns();
     await _loadRefunds();
+    if (await _db.getSetting('returns_fix_v1') != '1') {
+      await _moveReturnsToIncome();
+      await _db.setSetting('returns_fix_v1', '1');
+    }
     if (await _db.getSetting('savings_fix_v1') != '1') {
       await _repairSavings();
       await _db.setSetting('savings_fix_v1', '1');
@@ -67,6 +71,20 @@ class AppState extends ChangeNotifier {
     if (next.isAfter(DateTime(now.year, now.month))) return;
     month = next;
     notifyListeners();
+  }
+
+  /// Dividends and interest were filed as investment withdrawals or Unknown
+  /// before 'Dividends & interest' existed; they are income you earned.
+  Future<void> _moveReturnsToIncome() async {
+    final earned = RegExp(r'(?<![a-z])(dividend|interest|int\.? ?pd|int\.? ?paid|int\.? ?cr)', caseSensitive: false);
+    for (var i = 0; i < txns.length; i++) {
+      final t = txns[i];
+      if (t.isExpense || (t.category != 'redemption' && t.category != 'income')) continue;
+      if (!earned.hasMatch('${t.merchant} ${t.note} ${t.raw ?? ''}')) continue;
+      final moved = t.copyWith(category: 'returns');
+      await _db.updateTxn(moved);
+      txns[i] = moved;
+    }
   }
 
   /// Earlier builds advised switching investments off, and categories made

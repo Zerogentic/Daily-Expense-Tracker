@@ -68,6 +68,12 @@ class Categorizer {
 
     if (type == TxnType.credit) {
       if (hay.contains('salary') || hay.contains('sal ') || hay.contains('payroll')) return 'salary';
+      // Dividends and interest are returns you earned: income, even from a fund or FD.
+      if (RegExp(r'(?<![a-z])(dividend|div pay|interest|int\.? ?pd|int\.? ?paid|int\.? ?cr|int\.? ?credit)',
+              caseSensitive: false)
+          .hasMatch(hay)) {
+        return 'returns';
+      }
       if (hay.contains('refund') || hay.contains('cashback') || hay.contains('reversed') || hay.contains('reversal')) {
         return 'refund';
       }

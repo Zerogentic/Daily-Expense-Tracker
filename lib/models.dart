@@ -206,6 +206,9 @@ class Category {
 
   /// Savings, not spending or income: investments, deposits, and money back from them.
   final bool saving;
+
+  /// Expenses, Investments (money in or out) or Income.
+  CategoryGroup get group => saving ? CategoryGroup.investment : (income ? CategoryGroup.income : CategoryGroup.expense);
 }
 
 /// Icons offered for new categories. Stored by index so release builds can
@@ -257,6 +260,7 @@ const List<IconData> categoryIconChoices = [
   Icons.trending_up_rounded,
   Icons.account_balance_wallet_rounded,
   Icons.lock_clock_rounded,
+  Icons.percent_rounded,
 ];
 
 const List<Color> categoryColorChoices = [
@@ -284,6 +288,7 @@ const List<Color> categoryColorChoices = [
   Color(0xFF9CA3AF),
   Color(0xFF818CF8),
   Color(0xFFA8A29E),
+  Color(0xFFA3E635),
 ];
 
 const List<Category> builtInCategories = [
@@ -304,13 +309,16 @@ const List<Category> builtInCategories = [
   Category('card_payment', 'Card bill payment', Icons.credit_card_rounded, Color(0xFF818CF8)),
   Category('misc', 'Other', Icons.category_rounded, Color(0xFFA8A29E)),
   // Not categorised yet: the app couldn't tell and the user hasn't picked one.
-  Category('investments', 'Investments', Icons.trending_up_rounded, Color(0xFF2F7BFF), saving: true),
+  Category('investments', 'Mutual funds & stocks', Icons.trending_up_rounded, Color(0xFF2F7BFF), saving: true),
   Category('deposits', 'FD, RD & PPF', Icons.lock_clock_rounded, Color(0xFF22D3EE), saving: true),
   Category('other', 'Unknown', Icons.help_outline_rounded, Color(0xFF9CA3AF)),
   Category('salary', 'Salary', Icons.work_rounded, Color(0xFF34D399), income: true),
   Category('refund', 'Refunds & cashback', Icons.replay_rounded, Color(0xFF22D3EE), income: true),
   Category('misc_income', 'Other income', Icons.savings_rounded, Color(0xFF4ADE80), income: true),
-  Category('redemption', 'Investment withdrawals', Icons.account_balance_wallet_rounded, Color(0xFF22D3EE),
+  // Real returns you earned: income.
+  Category('returns', 'Dividends & interest', Icons.percent_rounded, Color(0xFFA3E635), income: true),
+  // Your own money coming back from investments: not income.
+  Category('redemption', 'Withdrawals & redemptions', Icons.account_balance_wallet_rounded, Color(0xFF22D3EE),
       income: true, saving: true),
   // Money in that isn't categorised yet.
   Category('income', 'Unknown', Icons.help_outline_rounded, Color(0xFF9CA3AF), income: true),
@@ -343,6 +351,21 @@ List<Category> get categories => [
       for (final c in builtInCategories) categoryOverrides[c.key] ?? c,
       ...customCategories,
     ];
+/// The three groups categories are shown in.
+enum CategoryGroup { expense, investment, income }
+
+extension CategoryGroupTitle on CategoryGroup {
+  String get title => switch (this) {
+        CategoryGroup.expense => 'Expenses',
+        CategoryGroup.investment => 'Investments',
+        CategoryGroup.income => 'Income',
+      };
+}
+
+/// Categories in one group, e.g. everything under Investments.
+List<Category> categoriesIn(CategoryGroup group) => categories.where((c) => c.group == group).toList();
+
+/// Every category for money going out (expenses and money put into investments).
 List<Category> get expenseCategories => categories.where((c) => !c.income).toList();
 List<Category> get incomeCategories => categories.where((c) => c.income).toList();
 

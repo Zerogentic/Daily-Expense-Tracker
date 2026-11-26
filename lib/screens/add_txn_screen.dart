@@ -112,7 +112,6 @@ class _AddTxnScreenState extends State<AddTxnScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cats = _type == TxnType.debit ? expenseCategories : incomeCategories;
     final accent = _type == TxnType.debit ? AppColors.accent : AppColors.good;
 
     return Scaffold(
@@ -196,8 +195,8 @@ class _AddTxnScreenState extends State<AddTxnScreen> {
             const Text('Category',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text)),
             const SizedBox(height: 14),
-            CategoryGrid(
-              categories: cats,
+            CategorySections(
+              income: _type == TxnType.credit,
               selected: _category,
               onSelected: (k) => setState(() {
                 _category = k;

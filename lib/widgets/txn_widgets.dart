@@ -180,13 +180,11 @@ Future<String?> pickCategory(BuildContext context, {required bool income, String
             Flexible(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
-                child: Center(
-                  child: CategoryGrid(
-                    categories: income ? incomeCategories : expenseCategories,
-                    selected: selected,
-                    onSelected: (key) => Navigator.pop(ctx, key),
-                    onAdd: addNew,
-                  ),
+                child: CategorySections(
+                  income: income,
+                  selected: selected,
+                  onSelected: (key) => Navigator.pop(ctx, key),
+                  onAdd: addNew,
                 ),
               ),
             ),
@@ -195,6 +193,48 @@ Future<String?> pickCategory(BuildContext context, {required bool income, String
       );
     },
   );
+}
+
+/// Categories for one direction of money, under group headings:
+/// Expenses + Investments for money out, Income + Investments for money in.
+class CategorySections extends StatelessWidget {
+  const CategorySections({super.key, required this.income, required this.onSelected, this.selected, this.onAdd});
+
+  final bool income;
+  final ValueChanged<String> onSelected;
+  final String? selected;
+  final VoidCallback? onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    final main = categoriesIn(income ? CategoryGroup.income : CategoryGroup.expense);
+    final invest = categoriesIn(CategoryGroup.investment).where((c) => c.income == income).toList();
+    Widget heading(String text, String? note) => Padding(
+          padding: const EdgeInsets.fromLTRB(2, 2, 2, 12),
+          child: Text.rich(
+            TextSpan(children: [
+              TextSpan(
+                  text: text.toUpperCase(),
+                  style: const TextStyle(
+                      fontSize: 11.5, letterSpacing: 0.8, fontWeight: FontWeight.w700, color: AppColors.muted)),
+              if (note != null)
+                TextSpan(text: '  ·  $note', style: const TextStyle(fontSize: 11.5, color: AppColors.muted)),
+            ]),
+          ),
+        );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        heading(income ? 'Income' : 'Expenses', null),
+        CategoryGrid(categories: main, selected: selected, onSelected: onSelected, onAdd: onAdd),
+        if (invest.isNotEmpty) ...[
+          const SizedBox(height: 22),
+          heading('Investments', income ? 'money back, not income' : 'not counted as spending'),
+          CategoryGrid(categories: invest, selected: selected, onSelected: onSelected),
+        ],
+      ],
+    );
+  }
 }
 
 class CategoryGrid extends StatelessWidget {
@@ -275,14 +315,15 @@ class CategoryGrid extends StatelessWidget {
 }
 
 /// Sheet for creating a category, or editing [existing]; returns its key, or null if cancelled.
-Future<String?> createCategory(BuildContext context, {required bool income, Category? existing}) async {
+Future<String?> createCategory(BuildContext context,
+    {required bool income, Category? existing, bool asInvestment = false}) async {
   final name = TextEditingController(text: existing?.label ?? '');
   var iconIndex = existing == null ? 0 : categoryIconChoices.indexOf(existing.icon);
   var colorIndex = existing == null ? 0 : categoryColorChoices.indexOf(existing.color);
   if (iconIndex < 0) iconIndex = 0;
   if (colorIndex < 0) colorIndex = 0;
   var reset = false;
-  var saving = existing?.saving ?? false;
+  var saving = existing?.saving ?? asInvestment;
   final canReset = existing != null && !existing.custom && categoryOverrides.containsKey(existing.key);
   final state = AppScope.read(context);
 

@@ -115,4 +115,18 @@ void main() {
     expect(income.map((e) => e.key), ['salary', 'misc_income']);
     expect(income.fold<double>(0, (s, e) => s + e.value), state.receivedIn(month));
   });
+
+  test('Categories sit in three groups, and returns are income', () async {
+    expect(categoryFor('investments').group, CategoryGroup.investment);
+    expect(categoryFor('deposits').group, CategoryGroup.investment);
+    expect(categoryFor('redemption').group, CategoryGroup.investment);
+    expect(categoryFor('returns').group, CategoryGroup.income);
+    expect(categoryFor('food').group, CategoryGroup.expense);
+    expect(categoriesIn(CategoryGroup.expense).any((c) => c.saving), isFalse);
+
+    await add('HDFC MF', 800, TxnType.credit, 'returns', day(2));
+    await add('Groww', 20000, TxnType.credit, 'redemption', day(2));
+    expect(state.receivedIn(month), 800); // the dividend is income, the redemption is not
+    expect(state.withdrawnIn(month), 20000);
+  });
 }
