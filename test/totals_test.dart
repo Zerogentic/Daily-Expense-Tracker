@@ -83,4 +83,13 @@ void main() {
     expect(state.spentIn(month), 3000);
     expect(state.receivedIn(month), 3000);
   });
+
+  test('Investments that were switched off count once moved to a savings category', () async {
+    final sip = await add('Zerodha Coin', 3000, TxnType.debit, 'other', day(2));
+    await state.setExcluded(sip, true);
+    expect(state.savedIn(month), 0);
+    await state.setCategory(sip, 'investments');
+    expect(state.savedIn(month), 3000);
+    expect(state.spentIn(month), 0);
+  });
 }

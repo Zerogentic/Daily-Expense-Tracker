@@ -534,11 +534,15 @@ class _TxnDetails extends StatelessWidget {
               child: SwitchListTile(
                 value: !txn.excluded,
                 activeThumbColor: AppColors.accent,
-                title: Text(txn.isExpense ? 'Count as an expense' : 'Count as income'),
+                title: Text(txn.isSaving
+                    ? (txn.isExpense ? 'Count as savings' : 'Count as money back from savings')
+                    : (txn.isExpense ? 'Count as an expense' : 'Count as income')),
                 subtitle: Text(
                   txn.excluded
                       ? 'Left out of totals and budgets'
-                      : 'Turn off for transfers between your accounts, investments and similar',
+                      : (txn.isSaving
+                          ? 'Included in your invested total'
+                          : 'Turn off for transfers between your own accounts and similar'),
                   style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
                 ),
                 onChanged: (on) => state.setExcluded(txn, !on),

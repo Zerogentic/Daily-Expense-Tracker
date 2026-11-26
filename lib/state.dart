@@ -24,6 +24,10 @@ class AppState extends ChangeNotifier {
     await _loadCategories();
     txns = await _db.allTxns();
     await _loadRefunds();
+    if (await _db.getSetting('savings_fix_v1') != '1') {
+      await _repairSavings();
+      await _db.setSetting('savings_fix_v1', '1');
+    }
     budgets = await _db.budgets();
     bills = await _db.bills();
     rules = await _db.rules();
@@ -60,6 +64,30 @@ class AppState extends ChangeNotifier {
     if (next.isAfter(DateTime(now.year, now.month))) return;
     month = next;
     notifyListeners();
+  }
+
+  /// Earlier builds advised switching investments off, and categories made
+  /// before savings existed weren't marked as savings. This puts both right.
+  Future<void> _repairSavings() async {
+    final looksLikeSaving = RegExp(
+        r'(?<![a-z])(invest\w*|sip|sips|mutual\s*funds?|mf|stocks?|shares?|equity|demat|fd|fds|'
+        r'fixed\s*deposits?|rd|recurring\s*deposits?|ppf|nps|savings?)(?![a-z])',
+        caseSensitive: false);
+    for (final c in List<Category>.from(customCategories)) {
+      if (c.income || c.saving || !looksLikeSaving.hasMatch(c.label)) continue;
+      final icon = categoryIconChoices.indexOf(c.icon);
+      final color = categoryColorChoices.indexOf(c.color);
+      await _db.saveCategory(c.key, c.label, icon < 0 ? 0 : icon, color < 0 ? 0 : color, c.income, saving: true);
+    }
+    await _loadCategories();
+    for (var i = 0; i < txns.length; i++) {
+      final t = txns[i];
+      if (!t.excluded || !t.isSaving) continue;
+      final fixed = t.copyWith(excluded: _excludedAfterMove(t, t.category));
+      if (fixed.excluded == t.excluded) continue;
+      await _db.updateTxn(fixed);
+      txns[i] = fixed;
+    }
   }
 
   // ---------- Refunds ----------
@@ -321,7 +349,15 @@ class AppState extends ChangeNotifier {
   Future<void> setCategory(Txn t, String category) async {
     final i = txns.indexWhere((x) => x.id == t.id);
     final current = i >= 0 ? txns[i] : t;
-    await updateTxn(current.copyWith(category: category));
+    await updateTxn(current.copyWith(category: category, excluded: _excludedAfterMove(current, category)));
+  }
+
+  /// Savings are tracked, not hidden: a transaction moved into a savings
+  /// category counts again, unless it's a hidden duplicate alert.
+  bool _excludedAfterMove(Txn t, String category) {
+    if (!t.excluded) return false;
+    final keepHidden = false;
+    return categoryFor(category).saving && !keepHidden ? false : t.excluded;
   }
 
   /// Other transactions from the same merchant and in the same direction.
@@ -346,7 +382,7 @@ class AppState extends ChangeNotifier {
     for (var i = 0; i < txns.length; i++) {
       final t = txns[i];
       if (!ids.contains(t.id) || t.category == category) continue;
-      final updated = t.copyWith(category: category);
+      final updated = t.copyWith(category: category, excluded: _excludedAfterMove(t, category));
       await _db.updateTxn(updated);
       txns[i] = updated;
     }
