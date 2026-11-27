@@ -60,16 +60,15 @@ class Panel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final content = Padding(padding: padding ?? const EdgeInsets.all(16), child: child);
-    return Container(
-      decoration: BoxDecoration(
-        color: color ?? AppColors.surface,
+    // A Material (not a coloured box) so list rows and buttons inside show their tap ripple.
+    return Material(
+      color: color ?? AppColors.surface,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
+        side: const BorderSide(color: AppColors.border),
       ),
       clipBehavior: Clip.antiAlias,
-      child: onTap == null
-          ? content
-          : Material(color: Colors.transparent, child: InkWell(onTap: onTap, child: content)),
+      child: onTap == null ? content : InkWell(onTap: onTap, child: content),
     );
   }
 }
