@@ -61,6 +61,10 @@ void main() {
       await state.addManualRefund(amazon, amount: 1500, date: day(8));
       await state.setBudget(AppState.totalBudgetKey, 40000);
       await state.setBudget('food', 6000);
+      final ravi = await state.addPerson('Ravi');
+      await state.splitExpense(state.txns.firstWhere((t) => t.merchant == 'BigBasket'), {ravi.id!: 1170});
+      final anu = await state.addPerson('Anu');
+      await state.friendPaid(person: anu, share: 450, merchant: 'Movie night', category: 'entertainment', date: day(9));
     });
   }
 
@@ -84,6 +88,8 @@ void main() {
     await shot(tester, '4_activity');
     await tester.tap(find.text('Budgets'));
     await shot(tester, '5_budgets');
+    await tester.tap(find.text('People'));
+    await shot(tester, '5b_people');
     await tester.tap(find.text('Overview'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Amazon').first);

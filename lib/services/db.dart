@@ -13,13 +13,14 @@ class AppDb {
     final dir = await getDatabasesPath();
     final db = await openDatabase(
       p.join(dir, 'money.db'),
-      version: 6,
+      version: 7,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) await _upgradeToV2(db);
         if (oldVersion < 3) await _upgradeToV3(db);
         if (oldVersion < 4) await _upgradeToV4(db);
         if (oldVersion < 5) await _upgradeToV5(db);
         if (oldVersion < 6) await _upgradeToV6(db);
+        if (oldVersion < 7) await _upgradeToV7(db);
       },
       onCreate: (db, version) async {
         await db.execute('''
@@ -55,6 +56,7 @@ class AppDb {
         await _upgradeToV4(db);
         await _upgradeToV5(db);
         await _upgradeToV6(db);
+        await _upgradeToV7(db);
       },
     );
     return AppDb._(db);
@@ -74,6 +76,42 @@ class AppDb {
   }
 
   /// v3: names the user gave to payees ("raju.k" -> "Raju (plumber)").
+  /// v7: people and what you owe each other.
+  static Future<void> _upgradeToV7(Database db) async {
+    await db.execute('CREATE TABLE people(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)');
+    await db.execute('''
+      CREATE TABLE ledger(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        person_id INTEGER NOT NULL,
+        amount REAL NOT NULL,
+        txn_id INTEGER,
+        kind TEXT NOT NULL,
+        date INTEGER NOT NULL,
+        note TEXT NOT NULL DEFAULT ''
+      )''');
+  }
+
+  Future<List<Person>> people() async =>
+      (await _db.query('people', orderBy: 'name COLLATE NOCASE')).map(Person.fromMap).toList();
+
+  Future<int> addPerson(String name) => _db.insert('people', {'name': name});
+
+  Future<void> deletePerson(int id) async {
+    await _db.delete('ledger', where: 'person_id = ?', whereArgs: [id]);
+    await _db.delete('people', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<List<LedgerEntry>> ledger() async => (await _db.query('ledger')).map(LedgerEntry.fromMap).toList();
+
+  Future<int> addEntry(LedgerEntry e) => _db.insert('ledger', e.toMap()..remove('id'));
+
+  Future<void> deleteEntry(int id) => _db.delete('ledger', where: 'id = ?', whereArgs: [id]);
+
+  Future<void> deleteLedgerFor(int txnId) => _db.delete('ledger', where: 'txn_id = ?', whereArgs: [txnId]);
+
+  Future<void> deleteSplitsFor(int txnId) =>
+      _db.delete('ledger', where: "txn_id = ? AND kind = 'split'", whereArgs: [txnId]);
+
   /// v6: a transaction can be set to count in a different month.
   static Future<void> _upgradeToV6(Database db) async {
     await db.execute('ALTER TABLE txns ADD COLUMN count_month INTEGER');
@@ -236,7 +274,7 @@ class AppDb {
       _db.insert('settings', {'key': key, 'value': value}, conflictAlgorithm: ConflictAlgorithm.replace);
 
   Future<void> clearAll() async {
-    for (final table in ['txns', 'budgets', 'bills', 'rules', 'settings', 'categories', 'aliases', 'refunds']) {
+    for (final table in ['txns', 'budgets', 'bills', 'rules', 'settings', 'categories', 'aliases', 'refunds', 'people', 'ledger']) {
       await _db.delete(table);
     }
   }

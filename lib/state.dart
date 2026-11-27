@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show ChangeNotifier;
 import 'package:flutter/widgets.dart';
 
+import 'format.dart';
 import 'models.dart';
 import 'services/categorizer.dart';
 import 'services/db.dart';
@@ -27,6 +28,7 @@ class AppState extends ChangeNotifier {
     await _loadCategories();
     txns = await _db.allTxns();
     await _loadRefunds();
+    await _loadPeople();
     if (await _db.getSetting('returns_fix_v1') != '1') {
       await _moveReturnsToIncome();
       await _db.setSetting('returns_fix_v1', '1');
@@ -137,6 +139,172 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  // ---------- Splitting with friends ----------
+  List<Person> people = [];
+  List<LedgerEntry> ledger = [];
+  final Map<int, double> _notMineOf = {};
+
+  Future<void> _loadPeople() async {
+    people = await _db.people();
+    ledger = await _db.ledger();
+    _indexLedger();
+  }
+
+  void _indexLedger() {
+    _notMineOf.clear();
+    for (final e in ledger) {
+      final id = e.txnId;
+      if (id == null || e.kind == LedgerKind.paidForMe) continue;
+      _notMineOf[id] = (_notMineOf[id] ?? 0) + e.amount.abs();
+    }
+  }
+
+  /// The part of a transaction that isn't yours: friends' shares of a split
+  /// expense, or money that only paid back a debt.
+  double notMine(Txn t) => t.id == null ? 0 : (_notMineOf[t.id] ?? 0);
+
+  Person? personById(int id) {
+    for (final p in people) {
+      if (p.id == id) return p;
+    }
+    return null;
+  }
+
+  Txn? txnById(int id) => _txnById(id);
+
+  /// Positive: they owe you. Negative: you owe them.
+  double balanceOf(Person p) => ledger.where((e) => e.personId == p.id).fold(0.0, (s, e) => s + e.amount);
+
+  List<LedgerEntry> entriesOf(Person p) =>
+      ledger.where((e) => e.personId == p.id).toList()..sort((a, b) => b.date.compareTo(a.date));
+
+  List<LedgerEntry> ledgerFor(Txn t) => t.id == null ? const [] : ledger.where((e) => e.txnId == t.id).toList();
+
+  Future<Person> addPerson(String name) async {
+    for (final p in people) {
+      if (p.name.toLowerCase() == name.toLowerCase()) return p;
+    }
+    final id = await _db.addPerson(name);
+    final p = Person(id: id, name: name);
+    people.add(p);
+    people.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    notifyListeners();
+    return p;
+  }
+
+  Future<void> deletePerson(Person p) async {
+    await _db.deletePerson(p.id!);
+    people.removeWhere((x) => x.id == p.id);
+    ledger.removeWhere((e) => e.personId == p.id);
+    _indexLedger();
+    notifyListeners();
+  }
+
+  Future<void> _addEntry(LedgerEntry e) async {
+    final id = await _db.addEntry(e);
+    ledger.add(e.withId(id));
+  }
+
+  /// Friends' shares of an expense you paid, by person id. Replaces any earlier split.
+  Future<void> splitExpense(Txn t, Map<int, double> shares) async {
+    if (t.id == null) return;
+    await _db.deleteSplitsFor(t.id!);
+    ledger.removeWhere((e) => e.txnId == t.id && e.kind == LedgerKind.split);
+    for (final s in shares.entries) {
+      if (s.value <= 0) continue;
+      await _addEntry(LedgerEntry(
+          personId: s.key, amount: s.value, txnId: t.id, kind: LedgerKind.split, date: t.date, note: t.title));
+    }
+    _indexLedger();
+    notifyListeners();
+  }
+
+  Future<void> removeSplit(Txn t) => splitExpense(t, const {});
+
+  /// A friend paid; your [share] counts as your spending and you owe it to them.
+  Future<Txn> friendPaid({
+    required Person person,
+    required double share,
+    required String merchant,
+    required String category,
+    required DateTime date,
+  }) async {
+    final t = Txn(
+        amount: share,
+        type: TxnType.debit,
+        category: category,
+        merchant: merchant,
+        note: 'Paid by ${person.name}',
+        date: date);
+    final id = await _db.insertTxn(t);
+    final saved = t.copyWith(id: id);
+    txns.add(saved);
+    txns.sort((a, b) => b.date.compareTo(a.date));
+    await _addEntry(LedgerEntry(
+        personId: person.id!, amount: -share, txnId: id, kind: LedgerKind.paidForMe, date: date, note: merchant));
+    _indexLedger();
+    notifyListeners();
+    return saved;
+  }
+
+  /// Money that pays back what's owed. [theyPaid]: they paid you (pass the money
+  /// in as [via]); otherwise you paid them (the money out). No [via] = cash.
+  Future<void> settle(Person p, double amount, {required bool theyPaid, Txn? via}) async {
+    await _addEntry(LedgerEntry(
+      personId: p.id!,
+      amount: theyPaid ? -amount : amount,
+      txnId: via?.id,
+      kind: LedgerKind.settle,
+      date: via?.date ?? DateTime.now(),
+      note: via == null ? 'Cash or other' : via.title,
+    ));
+    _indexLedger();
+    notifyListeners();
+  }
+
+  Future<void> deleteEntry(LedgerEntry e) async {
+    if (e.id != null) await _db.deleteEntry(e.id!);
+    ledger.removeWhere((x) => x.id == e.id);
+    _indexLedger();
+    notifyListeners();
+  }
+
+  /// Recent payments that could be a settle-up with [p]: money in if they're
+  /// paying you, money out if you're paying them. Their name first.
+  List<Txn> settleCandidates(Person p, {required bool theyPaid}) {
+    final since = DateTime.now().subtract(const Duration(days: 120));
+    final first = p.name.toLowerCase().split(' ').first;
+    final list = txns
+        .where((t) =>
+            t.id != null &&
+            t.isExpense != theyPaid &&
+            !t.excluded &&
+            !t.isSaving &&
+            !t.date.isBefore(since) &&
+            netAmount(t) > 0.005 &&
+            ledgerFor(t).isEmpty)
+        .toList();
+    int rank(Txn t) => first.length >= 3 && t.merchant.toLowerCase().contains(first) ? 0 : 1;
+    list.sort((a, b) {
+      final r = rank(a) - rank(b);
+      return r != 0 ? r : b.date.compareTo(a.date);
+    });
+    return list;
+  }
+
+  /// A friendly message listing what [p] owes.
+  String reminderText(Person p) {
+    final owed = balanceOf(p);
+    final items = entriesOf(p).where((e) => e.kind == LedgerKind.split).take(5).toList();
+    return [
+      'Hi ${p.name}, a quick reminder that you owe me ${money(owed)}.',
+      if (items.isNotEmpty) '',
+      for (final e in items) '• ${e.note} (${dayMonth(e.date)}): ${money(e.amount)}',
+      '',
+      'Thanks!',
+    ].join('\n');
+  }
+
   // ---------- Refunds ----------
   List<RefundLink> refundLinks = [];
   final Map<int, double> _refundedOf = {};
@@ -168,24 +336,24 @@ class AppState extends ChangeNotifier {
   /// expense's month, and the refunded part of an income stops counting as income.
   double counted(Txn t) {
     if (t.excluded) return 0;
-    final v = t.isExpense ? t.amount - refundedFor(t) : t.amount - usedAsRefund(t);
+    final v = (t.isExpense ? t.amount - refundedFor(t) : t.amount - usedAsRefund(t)) - notMine(t);
     return v < 0.005 ? 0 : v;
   }
 
   /// The amount after refunds: what was really spent, or what still counts as income.
   /// Unlike [counted], it ignores the "Count as an expense" switch.
   double netAmount(Txn t) {
-    final v = t.isExpense ? t.amount - refundedFor(t) : t.amount - usedAsRefund(t);
+    final v = (t.isExpense ? t.amount - refundedFor(t) : t.amount - usedAsRefund(t)) - notMine(t);
     return v < 0.005 ? 0 : v;
   }
 
   double remainingToRefund(Txn expense) {
-    final v = expense.amount - refundedFor(expense);
+    final v = expense.amount - refundedFor(expense) - notMine(expense);
     return v < 0.005 ? 0 : v;
   }
 
   double availableToLink(Txn income) {
-    final v = income.amount - usedAsRefund(income);
+    final v = income.amount - usedAsRefund(income) - notMine(income);
     return v < 0.005 ? 0 : v;
   }
 
@@ -565,6 +733,9 @@ class AppState extends ChangeNotifier {
     if (t.id == null) return;
     await _db.deleteTxn(t.id!);
     await _db.deleteRefundsFor(t.id!);
+    await _db.deleteLedgerFor(t.id!);
+    ledger.removeWhere((e) => e.txnId == t.id);
+    _indexLedger();
     refundLinks.removeWhere((r) => r.expenseId == t.id || r.incomeId == t.id);
     txns.removeWhere((x) => x.id == t.id);
     _indexRefunds();
@@ -620,6 +791,9 @@ class AppState extends ChangeNotifier {
     customCategories.clear();
     categoryOverrides.clear();
     refundLinks = [];
+    people = [];
+    ledger = [];
+    _indexLedger();
     _indexRefunds();
     notifyListeners();
   }

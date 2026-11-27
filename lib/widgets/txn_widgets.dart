@@ -6,6 +6,7 @@ import '../models.dart';
 import '../screens/add_txn_screen.dart';
 import '../state.dart';
 import '../theme.dart';
+import 'split_widgets.dart';
 
 class CategoryIcon extends StatelessWidget {
   const CategoryIcon(this.category, {super.key, this.size = 42});
@@ -40,6 +41,9 @@ class TxnTile extends StatelessWidget {
     final shifted = txn.budgetMonth.year != txn.date.year || txn.budgetMonth.month != txn.date.month;
     final subtitle = [
       if (shifted) 'Counts in ${monthShort(txn.budgetMonth)}',
+      if (state.ledgerFor(txn).any((e) => e.kind == LedgerKind.split)) 'Split',
+      if (state.ledgerFor(txn).any((e) => e.kind == LedgerKind.paidForMe)) 'Paid by a friend',
+      if (state.ledgerFor(txn).any((e) => e.kind == LedgerKind.settle)) 'Settle-up',
       if (refunded > 0)
         refunded >= txn.amount - 0.005 ? 'Fully refunded' : 'Refunded ${money(refunded)}',
       if (!txn.isExpense && state.usedAsRefund(txn) > 0 && txn.category != 'refund') 'Refund',
@@ -619,6 +623,7 @@ class _TxnDetails extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             if (txn.note.isNotEmpty) _row('Note', txn.note),
+            PeopleSection(txn: txn),
             if (txn.isExpense) _RefundsSection(txn: txn),
             if (!txn.isExpense && state.refundedExpensesOf(txn).isNotEmpty) _RefundOfSection(txn: txn),
             const SizedBox(height: 24),

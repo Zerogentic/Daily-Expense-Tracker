@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'screens/activity_screen.dart';
 import 'screens/add_txn_screen.dart';
 import 'screens/bills_screen.dart';
+import 'screens/people_screen.dart';
 import 'screens/budgets_screen.dart';
 import 'screens/home_screen.dart';
 import 'services/db.dart';
@@ -48,7 +49,7 @@ class Shell extends StatefulWidget {
 class _ShellState extends State<Shell> {
   int _tab = 0;
 
-  static const _titles = ['Overview', 'Activity', 'Budgets', 'Bills'];
+  static const _titles = ['Overview', 'Activity', 'Budgets', 'Bills', 'People'];
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +62,7 @@ class _ShellState extends State<Shell> {
       const ActivityScreen(),
       const BudgetsScreen(),
       const BillsScreen(),
+      const PeopleScreen(),
     ];
 
     return Scaffold(
@@ -97,6 +99,7 @@ class _ShellState extends State<Shell> {
           NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long_rounded), label: 'Activity'),
           NavigationDestination(icon: Icon(Icons.pie_chart_outline_rounded), selectedIcon: Icon(Icons.pie_chart_rounded), label: 'Budgets'),
           NavigationDestination(icon: Icon(Icons.event_note_outlined), selectedIcon: Icon(Icons.event_note_rounded), label: 'Bills'),
+          NavigationDestination(icon: Icon(Icons.group_outlined), selectedIcon: Icon(Icons.group_rounded), label: 'People'),
         ],
       ),
     );

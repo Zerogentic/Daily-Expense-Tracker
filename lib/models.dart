@@ -176,6 +176,85 @@ class RefundLink {
       );
 }
 
+/// Someone you split money with.
+class Person {
+  const Person({this.id, required this.name});
+
+  final int? id;
+  final String name;
+
+  factory Person.fromMap(Map<String, Object?> m) => Person(id: m['id'] as int?, name: m['name'] as String);
+}
+
+enum LedgerKind {
+  /// You paid; they owe you their share.
+  split,
+
+  /// They paid; you owe them your share.
+  paidForMe,
+
+  /// Money that paid back what was owed.
+  settle,
+}
+
+/// One change to what you and a person owe each other.
+class LedgerEntry {
+  const LedgerEntry({
+    this.id,
+    required this.personId,
+    required this.amount,
+    this.txnId,
+    required this.kind,
+    required this.date,
+    this.note = '',
+  });
+
+  final int? id;
+  final int personId;
+
+  /// Positive: they owe you more. Negative: you owe them more, or they paid you back.
+  final double amount;
+
+  /// The expense that was split, the expense they paid, or the payment that settled it.
+  final int? txnId;
+  final LedgerKind kind;
+  final DateTime date;
+  final String note;
+
+  LedgerEntry withId(int newId) =>
+      LedgerEntry(id: newId, personId: personId, amount: amount, txnId: txnId, kind: kind, date: date, note: note);
+
+  Map<String, Object?> toMap() => {
+        if (id != null) 'id': id,
+        'person_id': personId,
+        'amount': amount,
+        'txn_id': txnId,
+        'kind': kind.name,
+        'date': date.millisecondsSinceEpoch,
+        'note': note,
+      };
+
+  factory LedgerEntry.fromMap(Map<String, Object?> m) => LedgerEntry(
+        id: m['id'] as int?,
+        personId: m['person_id'] as int,
+        amount: (m['amount'] as num).toDouble(),
+        txnId: m['txn_id'] as int?,
+        kind: LedgerKind.values.byName(m['kind'] as String),
+        date: DateTime.fromMillisecondsSinceEpoch(m['date'] as int),
+        note: (m['note'] as String?) ?? '',
+      );
+}
+
+/// [total] split into [count] equal shares, to the paisa; the last share takes the rounding.
+List<double> equalShares(double total, int count) {
+  if (count <= 0) return const [];
+  final each = (total / count * 100).floor() / 100;
+  return [
+    for (var i = 0; i < count; i++)
+      i == count - 1 ? double.parse((total - each * (count - 1)).toStringAsFixed(2)) : each,
+  ];
+}
+
 class Bill {
   const Bill({
     this.id,

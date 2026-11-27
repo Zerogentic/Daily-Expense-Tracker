@@ -155,4 +155,43 @@ void main() {
     expect(state.receivedIn(aug), 90000);
     expect(state.receivedIn(sep), 0);
   });
+
+  test('Splitting: only your share counts; settle-ups are not income or spending', () async {
+    expect(equalShares(1000, 3), [333.33, 333.33, 333.34]);
+
+    final dinner = await add('Barbeque Nation', 3000, TxnType.debit, 'food', day(2));
+    final ravi = await state.addPerson('Ravi');
+    final anu = await state.addPerson('Anu');
+    await state.splitExpense(dinner, {ravi.id!: 1000, anu.id!: 1000});
+    expect(state.spentIn(month), 1000);
+    expect(state.balanceOf(ravi), 1000);
+    expect(state.netAmount(dinner), 1000);
+
+    // Ravi pays back by UPI: that money isn't income.
+    final upi = await add('Ravi Kumar', 1000, TxnType.credit, 'income', day(3));
+    expect(state.settleCandidates(ravi, theyPaid: true).first.merchant, 'Ravi Kumar');
+    await state.settle(ravi, 1000, theyPaid: true, via: upi);
+    expect(state.balanceOf(ravi), 0);
+    expect(state.receivedIn(month), 0);
+
+    // Anu pays back in cash.
+    await state.settle(anu, 1000, theyPaid: true);
+    expect(state.balanceOf(anu), 0);
+
+    // Anu pays for a movie; your share is your spending and you owe her.
+    await state.friendPaid(person: anu, share: 400, merchant: 'Movie', category: 'entertainment', date: day(4));
+    expect(state.balanceOf(anu), -400);
+    expect(state.spentIn(month), 1400);
+
+    // You pay Anu back: not spending again.
+    final myUpi = await add('Anu', 400, TxnType.debit, 'other', day(5));
+    await state.settle(anu, 400, theyPaid: false, via: myUpi);
+    expect(state.balanceOf(anu), 0);
+    expect(state.spentIn(month), 1400);
+
+    // Removing the split makes the dinner fully yours again.
+    await state.removeSplit(dinner);
+    expect(state.netAmount(dinner), 3000);
+    expect(state.reminderText(ravi), contains('Ravi'));
+  });
 }
